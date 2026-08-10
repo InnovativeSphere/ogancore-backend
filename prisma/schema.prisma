@@ -1,0 +1,545 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ─────────────────────────────────────────────
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+}
+
+enum PlanInterval {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  GRACE
+  SUSPENDED
+  EXPIRED
+}
+
+enum MovementType {
+  SALE
+  RECEIPT
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUSTMENT
+}
+
+enum RequisitionStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+  ORDERED
+}
+
+enum OrderStatus {
+  PENDING
+  SENT
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  POS_CARD
+  BANK_TRANSFER
+  OTHER
+}
+
+enum ReportStatus {
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+// ─── Identity & Access ─────────────────────────────────
+model Role {
+  roleId      Int      @id @default(autoincrement()) @map("role_id")
+  roleName    String   @db.VarChar(50) @map("role_name")
+  description String?  @db.Text
+  users       User[]
+
+  @@map("ROLES")
+}
+
+model User {
+  userId                     Int                      @id @default(autoincrement()) @map("user_id")
+  fullName                   String                   @db.VarChar(100) @map("full_name")
+  username                   String                   @unique @db.VarChar(50)
+  email                      String                   @unique @db.VarChar(100)
+  phone                      String?                  @db.VarChar(20)
+  passwordHash               String                   @map("password_hash")
+  roleId                     Int                      @map("role_id")
+  branchId                   Int                      @map("branch_id")
+  status                     UserStatus               @default(ACTIVE)
+  failedLogins               Int                      @default(0) @map("failed_logins")
+  lockedUntil                DateTime?                @map("locked_until")
+  createdAt                  DateTime                 @default(now()) @map("created_at")
+  lastLogin                  DateTime?                @map("last_login")
+
+  role                       Role                     @relation(fields: [roleId], references: [roleId])
+  branch                     Branch                   @relation(fields: [branchId], references: [branchId])
+
+  sales                      Sale[]                   @relation("cashier")
+  expenses                   Expense[]
+  recordedMovements          InventoryMovement[]      @relation("recordedBy")
+  generatedReports           ReportLog[]
+  loginAttempts              LoginAttempt[]
+  auditLogs                  AuditLog[]
+  sentNotifications          Notification[]
+  purchaseRequisitions       PurchaseRequisition[]
+  goodsReceiptsReceived      GoodsReceipt[]           @relation("receiver")
+  salesReportsGenerated      SalesReport[]
+  inventoryReportsGenerated  InventoryReport[]
+  financialReportsGenerated  FinancialReport[]
+
+  @@map("USERS")
+}
+
+model LoginAttempt {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  success    Boolean
+  ipAddress  String?  @db.VarChar(45) @map("ip_address")
+  attemptedAt DateTime @default(now()) @map("attempted_at")
+
+  user       User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("LOGIN_ATTEMPTS")
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("PASSWORD_RESET_TOKENS")
+}
+
+// ─── Organization ──────────────────────────────────────
+model Branch {
+  branchId              Int                     @id @default(autoincrement()) @map("branch_id")
+  name                  String                  @db.VarChar(100)
+  address               String?                 @db.Text
+  phone                 String?                 @db.VarChar(20)
+  email                 String?                 @db.VarChar(100)
+  createdAt             DateTime                @default(now()) @map("created_at")
+
+  users                 User[]
+  inventory             Inventory[]
+  sales                 Sale[]
+  expenses              Expense[]
+  inventoryMovements    InventoryMovement[]
+  purchaseRequisitions  PurchaseRequisition[]
+  purchaseOrders        PurchaseOrder[]
+  subscriptions         TenantSubscription[]
+  salesReports          SalesReport[]
+  inventoryReports      InventoryReport[]
+  financialReports      FinancialReport[]
+  reportSchedules       ReportSchedule[]
+
+  @@map("BRANCHES")
+}
+
+// ─── Catalog ───────────────────────────────────────────
+model Category {
+  categoryId   Int      @id @default(autoincrement()) @map("category_id")
+  categoryName String   @db.VarChar(100) @map("category_name")
+  description  String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  products     Product[]
+
+  @@map("CATEGORIES")
+}
+
+model Supplier {
+  supplierId    Int             @id @default(autoincrement()) @map("supplier_id")
+  supplierName  String          @db.VarChar(100) @map("supplier_name")
+  phone         String?         @db.VarChar(20)
+  email         String?         @db.VarChar(100)
+  address       String?         @db.Text
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  products      Product[]
+  purchaseOrders PurchaseOrder[]
+
+  @@map("SUPPLIERS")
+}
+
+model Product {
+  productId             Int                      @id @default(autoincrement()) @map("product_id")
+  productName           String                   @db.VarChar(100) @map("product_name")
+  categoryId            Int                      @map("category_id")
+  supplierId            Int?                     @map("supplier_id")
+  barcode               String?                  @db.VarChar(50)
+  sku                   String?                  @db.VarChar(50)
+  description           String?                  @db.Text
+  costPrice             Decimal                  @db.Decimal(10,2) @map("cost_price")
+  sellingPrice          Decimal                  @db.Decimal(10,2) @map("selling_price")
+  reorderLevel          Int                      @default(0) @map("reorder_level")
+  status                String                   @default("active") @db.VarChar(20)
+  createdAt             DateTime                 @default(now()) @map("created_at")
+
+  category              Category                 @relation(fields: [categoryId], references: [categoryId])
+  supplier              Supplier?                @relation(fields: [supplierId], references: [supplierId])
+
+  inventory             Inventory[]
+  saleItems             SaleItem[]
+  movements             InventoryMovement[]
+  purchaseRequisitions  PurchaseRequisition[]
+  goodsReceipts         GoodsReceipt[]
+
+  @@map("PRODUCTS")
+}
+
+// ─── Inventory ─────────────────────────────────────────
+model Inventory {
+  inventoryId Int      @id @default(autoincrement()) @map("inventory_id")
+  productId   Int      @map("product_id")
+  branchId    Int      @map("branch_id")
+  quantity    Int      @default(0)
+  lastUpdated DateTime @updatedAt @map("last_updated")
+
+  product     Product  @relation(fields: [productId], references: [productId])
+  branch      Branch   @relation(fields: [branchId], references: [branchId])
+
+  @@unique([productId, branchId])
+  @@map("INVENTORY")
+}
+
+model InventoryMovement {
+  movementId     Int          @id @default(autoincrement()) @map("movement_id")
+  productId      Int          @map("product_id")
+  branchId       Int          @map("branch_id")
+  movementType   MovementType @map("movement_type")
+  quantityChange Int          @map("quantity_change")
+  quantityBefore Int          @map("quantity_before")
+  quantityAfter  Int          @map("quantity_after")
+  referenceId    Int?         @map("reference_id")
+  referenceTable String?      @db.VarChar(50) @map("reference_table")
+  recordedBy     Int          @map("recorded_by")
+  note           String?      @db.Text
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  product        Product      @relation(fields: [productId], references: [productId])
+  branch         Branch       @relation(fields: [branchId], references: [branchId])
+  recorder       User         @relation("recordedBy", fields: [recordedBy], references: [userId])
+
+  @@map("INVENTORY_MOVEMENTS")
+}
+
+// ─── Sales & Payments ──────────────────────────────────
+model Sale {
+  saleId        Int        @id @default(autoincrement()) @map("sale_id")
+  invoiceNumber String     @unique @db.VarChar(30) @map("invoice_number")
+  customerId    Int?       @map("customer_id")
+  userId        Int        @map("user_id")
+  branchId      Int        @map("branch_id")
+  saleDate      DateTime   @default(now()) @map("sale_date")
+  totalAmount   Decimal    @db.Decimal(10,2) @map("total_amount")
+  discount      Decimal    @default(0) @db.Decimal(10,2)
+  grandTotal    Decimal    @db.Decimal(10,2) @map("grand_total")
+  status        String     @default("completed") @db.VarChar(20)
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  customer      Customer?  @relation(fields: [customerId], references: [customerId])
+  cashier       User       @relation("cashier", fields: [userId], references: [userId])
+  branch        Branch     @relation(fields: [branchId], references: [branchId])
+
+  items         SaleItem[]
+  payments      Payment[]
+
+  @@map("SALES")
+}
+
+model SaleItem {
+  saleItemId Int     @id @default(autoincrement()) @map("sale_item_id")
+  saleId     Int     @map("sale_id")
+  productId  Int     @map("product_id")
+  quantity   Int
+  unitPrice  Decimal @db.Decimal(10,2) @map("unit_price")
+  totalPrice Decimal @db.Decimal(10,2) @map("total_price")
+
+  sale       Sale    @relation(fields: [saleId], references: [saleId], onDelete: Cascade)
+  product    Product @relation(fields: [productId], references: [productId])
+
+  @@map("SALE_ITEMS")
+}
+
+model Payment {
+  paymentId       Int           @id @default(autoincrement()) @map("payment_id")
+  saleId          Int           @map("sale_id")
+  paymentMethod   PaymentMethod @map("payment_method")
+  amount          Decimal       @db.Decimal(10,2)
+  paymentDate     DateTime      @default(now()) @map("payment_date")
+  referenceNumber String?       @db.VarChar(50) @map("reference_number")
+  status          String        @default("completed") @db.VarChar(20)
+
+  sale            Sale          @relation(fields: [saleId], references: [saleId], onDelete: Cascade)
+
+  @@map("PAYMENTS")
+}
+
+// ─── Customer & Supplier Contacts ──────────────────────
+model Customer {
+  customerId    Int      @id @default(autoincrement()) @map("customer_id")
+  name          String   @db.VarChar(100)
+  phone         String?  @db.VarChar(20)
+  email         String?  @db.VarChar(100)
+  address       String?  @db.Text
+  loyaltyPoints Int      @default(0) @map("loyalty_points")
+  balance       Decimal  @default(0) @db.Decimal(10,2)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  sales         Sale[]
+
+  @@map("CUSTOMERS")
+}
+
+// ─── Expenses ──────────────────────────────────────────
+model Expense {
+  expenseId   Int      @id @default(autoincrement()) @map("expense_id")
+  branchId    Int      @map("branch_id")
+  expenseName String   @db.VarChar(100) @map("expense_name")
+  category    String?  @db.VarChar(50)
+  amount      Decimal  @db.Decimal(10,2)
+  expenseDate DateTime @map("expense_date")
+  description String?  @db.Text
+  recordedBy  Int      @map("recorded_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  branch      Branch   @relation(fields: [branchId], references: [branchId])
+  recorder    User     @relation(fields: [recordedBy], references: [userId])
+
+  @@map("EXPENSES")
+}
+
+// ─── Procurement ───────────────────────────────────────
+model PurchaseRequisition {
+  requisitionId Int               @id @default(autoincrement()) @map("requisition_id")
+  branchId      Int               @map("branch_id")
+  requestedBy   Int               @map("requested_by")
+  productId     Int               @map("product_id")
+  quantity      Int
+  reason        String?           @db.Text
+  status        RequisitionStatus @default(DRAFT)
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  branch        Branch            @relation(fields: [branchId], references: [branchId])
+  requester     User              @relation(fields: [requestedBy], references: [userId])
+  product       Product           @relation(fields: [productId], references: [productId])
+  purchaseOrders PurchaseOrder[]
+
+  @@map("PURCHASE_REQUISITIONS")
+}
+
+model PurchaseOrder {
+  orderId       Int                  @id @default(autoincrement()) @map("order_id")
+  requisitionId Int?                 @map("requisition_id")
+  supplierId    Int                  @map("supplier_id")
+  branchId      Int                  @map("branch_id")
+  status        OrderStatus          @default(PENDING)
+  orderDate     DateTime             @default(now()) @map("order_date")
+  expectedDate  DateTime?            @map("expected_date")
+  notes         String?              @db.Text
+
+  supplier      Supplier             @relation(fields: [supplierId], references: [supplierId])
+  branch        Branch               @relation(fields: [branchId], references: [branchId])
+  requisition   PurchaseRequisition? @relation(fields: [requisitionId], references: [requisitionId])
+  receipts      GoodsReceipt[]
+
+  @@map("PURCHASE_ORDERS")
+}
+
+model GoodsReceipt {
+  receiptId    Int           @id @default(autoincrement()) @map("receipt_id")
+  orderId      Int           @map("order_id")
+  productId    Int           @map("product_id")
+  quantity     Int
+  receivedBy   Int           @map("received_by")
+  receivedDate DateTime      @default(now()) @map("received_date")
+  notes        String?       @db.Text
+
+  order        PurchaseOrder @relation(fields: [orderId], references: [orderId])
+  product      Product       @relation(fields: [productId], references: [productId])
+  receiver     User          @relation("receiver", fields: [receivedBy], references: [userId])
+
+  @@map("GOODS_RECEIPTS")
+}
+
+// ─── Subscriptions ─────────────────────────────────────
+model SubscriptionPlan {
+  planId    Int                 @id @default(autoincrement()) @map("plan_id")
+  name      String              @db.VarChar(50)
+  interval  PlanInterval
+  price     Decimal             @db.Decimal(10,2)
+  features  String?             @db.Text
+
+  subscriptions TenantSubscription[]
+
+  @@map("SUBSCRIPTION_PLANS")
+}
+
+model TenantSubscription {
+  subscriptionId Int                @id @default(autoincrement()) @map("subscription_id")
+  branchId       Int                @map("branch_id")
+  planId         Int                @map("plan_id")
+  startDate      DateTime           @map("start_date")
+  endDate        DateTime           @map("end_date")
+  status         SubscriptionStatus @default(TRIAL)
+  graceUntil     DateTime?          @map("grace_until")
+  createdAt      DateTime           @default(now()) @map("created_at")
+
+  branch         Branch             @relation(fields: [branchId], references: [branchId])
+  plan           SubscriptionPlan   @relation(fields: [planId], references: [planId])
+
+  invoices       SubscriptionInvoice[]
+
+  @@map("TENANT_SUBSCRIPTIONS")
+}
+
+model SubscriptionInvoice {
+  invoiceId      Int               @id @default(autoincrement()) @map("invoice_id")
+  subscriptionId Int               @map("subscription_id")
+  amount         Decimal           @db.Decimal(10,2)
+  dueDate        DateTime          @map("due_date")
+  paidAt         DateTime?         @map("paid_at")
+  status         String            @default("unpaid") @db.VarChar(20)
+
+  subscription   TenantSubscription @relation(fields: [subscriptionId], references: [subscriptionId])
+
+  @@map("SUBSCRIPTION_INVOICES")
+}
+
+// ─── Reporting ─────────────────────────────────────────
+model SalesReport {
+  reportId          Int      @id @default(autoincrement()) @map("report_id")
+  branchId          Int      @map("branch_id")
+  reportDate        DateTime @map("report_date")
+  totalSales        Decimal  @db.Decimal(12,2) @map("total_sales")
+  totalTransactions Int      @map("total_transactions")
+  totalDiscount     Decimal  @db.Decimal(10,2) @map("total_discount")
+  totalTax          Decimal  @db.Decimal(10,2) @map("total_tax")
+  netSales          Decimal  @db.Decimal(12,2) @map("net_sales")
+  generatedAt       DateTime @default(now()) @map("generated_at")
+  generatedBy       Int      @map("generated_by")
+
+  branch            Branch   @relation(fields: [branchId], references: [branchId])
+  generator         User     @relation(fields: [generatedBy], references: [userId])
+
+  @@map("SALES_REPORT")
+}
+
+model InventoryReport {
+  reportId        Int      @id @default(autoincrement()) @map("report_id")
+  branchId        Int      @map("branch_id")
+  reportDate      DateTime @map("report_date")
+  totalProducts   Int      @map("total_products")
+  totalStock      Int      @map("total_stock_quantity")
+  totalValue      Decimal  @db.Decimal(12,2) @map("total_stock_value")
+  lowStockItems   Int      @map("low_stock_items")
+  outOfStockItems Int      @map("out_of_stock_items")
+  generatedAt     DateTime @default(now()) @map("generated_at")
+  generatedBy     Int      @map("generated_by")
+
+  branch          Branch   @relation(fields: [branchId], references: [branchId])
+  generator       User     @relation(fields: [generatedBy], references: [userId])
+
+  @@map("INVENTORY_REPORT")
+}
+
+model FinancialReport {
+  reportId          Int      @id @default(autoincrement()) @map("report_id")
+  branchId          Int      @map("branch_id")
+  periodStart       DateTime @map("report_period_start")
+  periodEnd         DateTime @map("report_period_end")
+  totalSales        Decimal  @db.Decimal(12,2) @map("total_sales")
+  costOfGoodsSold   Decimal  @db.Decimal(12,2) @map("cost_of_goods_sold")
+  grossProfit       Decimal  @db.Decimal(12,2) @map("gross_profit")
+  totalExpenses     Decimal  @db.Decimal(12,2) @map("total_expenses")
+  netProfit         Decimal  @db.Decimal(12,2) @map("net_profit")
+  generatedAt       DateTime @default(now()) @map("generated_at")
+  generatedBy       Int      @map("generated_by")
+
+  branch            Branch   @relation(fields: [branchId], references: [branchId])
+  generator         User     @relation(fields: [generatedBy], references: [userId])
+
+  @@map("FINANCIAL_REPORT")
+}
+
+model ReportSchedule {
+  scheduleId     Int      @id @default(autoincrement()) @map("schedule_id")
+  reportType     String   @db.VarChar(50) @map("report_type")
+  frequency      String   @db.VarChar(20)
+  day            Int?
+  time           String   @db.VarChar(5)
+  branchId       Int      @map("branch_id")
+  emailRecipient String?  @db.VarChar(255) @map("email_recipient")
+  status         String   @default("active") @db.VarChar(20)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  branch         Branch   @relation(fields: [branchId], references: [branchId])
+
+  @@map("REPORT_SCHEDULE")
+}
+
+model ReportLog {
+  logId        Int          @id @default(autoincrement()) @map("log_id")
+  reportType   String       @db.VarChar(50) @map("report_type")
+  reportId     Int?         @map("report_id")
+  generatedBy  Int          @map("generated_by")
+  generatedAt  DateTime     @default(now()) @map("generated_at")
+  filePath     String?      @db.VarChar(255) @map("file_path")
+  status       ReportStatus @default(GENERATING)
+  errorMessage String?      @db.Text @map("error")
+
+  generator    User         @relation(fields: [generatedBy], references: [userId])
+
+  @@map("REPORT_LOG")
+}
+
+// ─── Audit & Notifications ─────────────────────────────
+model AuditLog {
+  logId     Int      @id @default(autoincrement()) @map("log_id")
+  userId    Int      @map("user_id")
+  action    String   @db.VarChar(50)
+  tableName String   @db.VarChar(50) @map("table_name")
+  recordId  Int      @map("record_id")
+  timestamp DateTime @default(now())
+  ipAddress String?  @db.VarChar(45) @map("ip_address")
+
+  user      User     @relation(fields: [userId], references: [userId])
+
+  @@map("AUDIT_LOG")
+}
+
+model Notification {
+  notificationId Int      @id @default(autoincrement()) @map("notification_id")
+  userId         Int      @map("user_id")
+  type           String   @db.VarChar(50)
+  message        String   @db.Text
+  isRead         Boolean  @default(false) @map("is_read")
+  scheduledFor   DateTime @map("scheduled_for")
+  sentAt         DateTime? @map("sent_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user           User     @relation(fields: [userId], references: [userId])
+
+  @@map("NOTIFICATIONS")
+}

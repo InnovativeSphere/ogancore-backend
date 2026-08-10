@@ -1,0 +1,509 @@
+-- CreateTable
+CREATE TABLE `ROLES` (
+    `role_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `role_name` VARCHAR(50) NOT NULL,
+    `description` TEXT NULL,
+
+    PRIMARY KEY (`role_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `USERS` (
+    `user_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `full_name` VARCHAR(100) NOT NULL,
+    `username` VARCHAR(50) NOT NULL,
+    `email` VARCHAR(100) NOT NULL,
+    `phone` VARCHAR(20) NULL,
+    `password_hash` VARCHAR(191) NOT NULL,
+    `role_id` INTEGER NOT NULL,
+    `branch_id` INTEGER NOT NULL,
+    `status` ENUM('ACTIVE', 'INACTIVE', 'LOCKED') NOT NULL DEFAULT 'ACTIVE',
+    `failed_logins` INTEGER NOT NULL DEFAULT 0,
+    `locked_until` DATETIME(3) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `last_login` DATETIME(3) NULL,
+
+    UNIQUE INDEX `USERS_username_key`(`username`),
+    UNIQUE INDEX `USERS_email_key`(`email`),
+    PRIMARY KEY (`user_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `LOGIN_ATTEMPTS` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `user_id` INTEGER NOT NULL,
+    `success` BOOLEAN NOT NULL,
+    `ip_address` VARCHAR(45) NULL,
+    `attempted_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PASSWORD_RESET_TOKENS` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `user_id` INTEGER NOT NULL,
+    `token_hash` VARCHAR(191) NOT NULL,
+    `expires_at` DATETIME(3) NOT NULL,
+    `used` BOOLEAN NOT NULL DEFAULT false,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `BRANCHES` (
+    `branch_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(100) NOT NULL,
+    `address` TEXT NULL,
+    `phone` VARCHAR(20) NULL,
+    `email` VARCHAR(100) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`branch_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `CATEGORIES` (
+    `category_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `category_name` VARCHAR(100) NOT NULL,
+    `description` TEXT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`category_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `SUPPLIERS` (
+    `supplier_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `supplier_name` VARCHAR(100) NOT NULL,
+    `phone` VARCHAR(20) NULL,
+    `email` VARCHAR(100) NULL,
+    `address` TEXT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`supplier_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PRODUCTS` (
+    `product_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `product_name` VARCHAR(100) NOT NULL,
+    `category_id` INTEGER NOT NULL,
+    `supplier_id` INTEGER NULL,
+    `barcode` VARCHAR(50) NULL,
+    `sku` VARCHAR(50) NULL,
+    `description` TEXT NULL,
+    `cost_price` DECIMAL(10, 2) NOT NULL,
+    `selling_price` DECIMAL(10, 2) NOT NULL,
+    `reorder_level` INTEGER NOT NULL DEFAULT 0,
+    `status` VARCHAR(20) NOT NULL DEFAULT 'active',
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`product_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `INVENTORY` (
+    `inventory_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `product_id` INTEGER NOT NULL,
+    `branch_id` INTEGER NOT NULL,
+    `quantity` INTEGER NOT NULL DEFAULT 0,
+    `last_updated` DATETIME(3) NOT NULL,
+
+    UNIQUE INDEX `INVENTORY_product_id_branch_id_key`(`product_id`, `branch_id`),
+    PRIMARY KEY (`inventory_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `INVENTORY_MOVEMENTS` (
+    `movement_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `product_id` INTEGER NOT NULL,
+    `branch_id` INTEGER NOT NULL,
+    `movement_type` ENUM('SALE', 'RECEIPT', 'TRANSFER_IN', 'TRANSFER_OUT', 'ADJUSTMENT') NOT NULL,
+    `quantity_change` INTEGER NOT NULL,
+    `quantity_before` INTEGER NOT NULL,
+    `quantity_after` INTEGER NOT NULL,
+    `reference_id` INTEGER NULL,
+    `reference_table` VARCHAR(50) NULL,
+    `recorded_by` INTEGER NOT NULL,
+    `note` TEXT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`movement_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `SALES` (
+    `sale_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `invoice_number` VARCHAR(30) NOT NULL,
+    `customer_id` INTEGER NULL,
+    `user_id` INTEGER NOT NULL,
+    `branch_id` INTEGER NOT NULL,
+    `sale_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `total_amount` DECIMAL(10, 2) NOT NULL,
+    `discount` DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    `grand_total` DECIMAL(10, 2) NOT NULL,
+    `status` VARCHAR(20) NOT NULL DEFAULT 'completed',
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    UNIQUE INDEX `SALES_invoice_number_key`(`invoice_number`),
+    PRIMARY KEY (`sale_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `SALE_ITEMS` (
+    `sale_item_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `sale_id` INTEGER NOT NULL,
+    `product_id` INTEGER NOT NULL,
+    `quantity` INTEGER NOT NULL,
+    `unit_price` DECIMAL(10, 2) NOT NULL,
+    `total_price` DECIMAL(10, 2) NOT NULL,
+
+    PRIMARY KEY (`sale_item_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PAYMENTS` (
+    `payment_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `sale_id` INTEGER NOT NULL,
+    `payment_method` ENUM('CASH', 'POS_CARD', 'BANK_TRANSFER', 'OTHER') NOT NULL,
+    `amount` DECIMAL(10, 2) NOT NULL,
+    `payment_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `reference_number` VARCHAR(50) NULL,
+    `status` VARCHAR(20) NOT NULL DEFAULT 'completed',
+
+    PRIMARY KEY (`payment_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `CUSTOMERS` (
+    `customer_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(100) NOT NULL,
+    `phone` VARCHAR(20) NULL,
+    `email` VARCHAR(100) NULL,
+    `address` TEXT NULL,
+    `loyalty_points` INTEGER NOT NULL DEFAULT 0,
+    `balance` DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`customer_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `EXPENSES` (
+    `expense_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `branch_id` INTEGER NOT NULL,
+    `expense_name` VARCHAR(100) NOT NULL,
+    `category` VARCHAR(50) NULL,
+    `amount` DECIMAL(10, 2) NOT NULL,
+    `expense_date` DATETIME(3) NOT NULL,
+    `description` TEXT NULL,
+    `recorded_by` INTEGER NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`expense_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PURCHASE_REQUISITIONS` (
+    `requisition_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `branch_id` INTEGER NOT NULL,
+    `requested_by` INTEGER NOT NULL,
+    `product_id` INTEGER NOT NULL,
+    `quantity` INTEGER NOT NULL,
+    `reason` TEXT NULL,
+    `status` ENUM('DRAFT', 'APPROVED', 'REJECTED', 'ORDERED') NOT NULL DEFAULT 'DRAFT',
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`requisition_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PURCHASE_ORDERS` (
+    `order_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `requisition_id` INTEGER NULL,
+    `supplier_id` INTEGER NOT NULL,
+    `branch_id` INTEGER NOT NULL,
+    `status` ENUM('PENDING', 'SENT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+    `order_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `expected_date` DATETIME(3) NULL,
+    `notes` TEXT NULL,
+
+    PRIMARY KEY (`order_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `GOODS_RECEIPTS` (
+    `receipt_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `order_id` INTEGER NOT NULL,
+    `product_id` INTEGER NOT NULL,
+    `quantity` INTEGER NOT NULL,
+    `received_by` INTEGER NOT NULL,
+    `received_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `notes` TEXT NULL,
+
+    PRIMARY KEY (`receipt_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `SUBSCRIPTION_PLANS` (
+    `plan_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(50) NOT NULL,
+    `interval` ENUM('MONTHLY', 'QUARTERLY', 'ANNUAL') NOT NULL,
+    `price` DECIMAL(10, 2) NOT NULL,
+    `features` TEXT NULL,
+
+    PRIMARY KEY (`plan_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `TENANT_SUBSCRIPTIONS` (
+    `subscription_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `branch_id` INTEGER NOT NULL,
+    `plan_id` INTEGER NOT NULL,
+    `start_date` DATETIME(3) NOT NULL,
+    `end_date` DATETIME(3) NOT NULL,
+    `status` ENUM('TRIAL', 'ACTIVE', 'GRACE', 'SUSPENDED', 'EXPIRED') NOT NULL DEFAULT 'TRIAL',
+    `grace_until` DATETIME(3) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`subscription_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `SUBSCRIPTION_INVOICES` (
+    `invoice_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `subscription_id` INTEGER NOT NULL,
+    `amount` DECIMAL(10, 2) NOT NULL,
+    `due_date` DATETIME(3) NOT NULL,
+    `paid_at` DATETIME(3) NULL,
+    `status` VARCHAR(20) NOT NULL DEFAULT 'unpaid',
+
+    PRIMARY KEY (`invoice_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `SALES_REPORT` (
+    `report_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `branch_id` INTEGER NOT NULL,
+    `report_date` DATETIME(3) NOT NULL,
+    `total_sales` DECIMAL(12, 2) NOT NULL,
+    `total_transactions` INTEGER NOT NULL,
+    `total_discount` DECIMAL(10, 2) NOT NULL,
+    `total_tax` DECIMAL(10, 2) NOT NULL,
+    `net_sales` DECIMAL(12, 2) NOT NULL,
+    `generated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `generated_by` INTEGER NOT NULL,
+
+    PRIMARY KEY (`report_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `INVENTORY_REPORT` (
+    `report_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `branch_id` INTEGER NOT NULL,
+    `report_date` DATETIME(3) NOT NULL,
+    `total_products` INTEGER NOT NULL,
+    `total_stock_quantity` INTEGER NOT NULL,
+    `total_stock_value` DECIMAL(12, 2) NOT NULL,
+    `low_stock_items` INTEGER NOT NULL,
+    `out_of_stock_items` INTEGER NOT NULL,
+    `generated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `generated_by` INTEGER NOT NULL,
+
+    PRIMARY KEY (`report_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `FINANCIAL_REPORT` (
+    `report_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `branch_id` INTEGER NOT NULL,
+    `report_period_start` DATETIME(3) NOT NULL,
+    `report_period_end` DATETIME(3) NOT NULL,
+    `total_sales` DECIMAL(12, 2) NOT NULL,
+    `cost_of_goods_sold` DECIMAL(12, 2) NOT NULL,
+    `gross_profit` DECIMAL(12, 2) NOT NULL,
+    `total_expenses` DECIMAL(12, 2) NOT NULL,
+    `net_profit` DECIMAL(12, 2) NOT NULL,
+    `generated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `generated_by` INTEGER NOT NULL,
+
+    PRIMARY KEY (`report_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `REPORT_SCHEDULE` (
+    `schedule_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `report_type` VARCHAR(50) NOT NULL,
+    `frequency` VARCHAR(20) NOT NULL,
+    `day` INTEGER NULL,
+    `time` VARCHAR(5) NOT NULL,
+    `branch_id` INTEGER NOT NULL,
+    `email_recipient` VARCHAR(255) NULL,
+    `status` VARCHAR(20) NOT NULL DEFAULT 'active',
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`schedule_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `REPORT_LOG` (
+    `log_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `report_type` VARCHAR(50) NOT NULL,
+    `report_id` INTEGER NULL,
+    `generated_by` INTEGER NOT NULL,
+    `generated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `file_path` VARCHAR(255) NULL,
+    `status` ENUM('GENERATING', 'COMPLETED', 'FAILED') NOT NULL DEFAULT 'GENERATING',
+    `error` TEXT NULL,
+
+    PRIMARY KEY (`log_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `AUDIT_LOG` (
+    `log_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `user_id` INTEGER NOT NULL,
+    `action` VARCHAR(50) NOT NULL,
+    `table_name` VARCHAR(50) NOT NULL,
+    `record_id` INTEGER NOT NULL,
+    `timestamp` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `ip_address` VARCHAR(45) NULL,
+
+    PRIMARY KEY (`log_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `NOTIFICATIONS` (
+    `notification_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `user_id` INTEGER NOT NULL,
+    `type` VARCHAR(50) NOT NULL,
+    `message` TEXT NOT NULL,
+    `is_read` BOOLEAN NOT NULL DEFAULT false,
+    `scheduled_for` DATETIME(3) NOT NULL,
+    `sent_at` DATETIME(3) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`notification_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- AddForeignKey
+ALTER TABLE `USERS` ADD CONSTRAINT `USERS_role_id_fkey` FOREIGN KEY (`role_id`) REFERENCES `ROLES`(`role_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `USERS` ADD CONSTRAINT `USERS_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `LOGIN_ATTEMPTS` ADD CONSTRAINT `LOGIN_ATTEMPTS_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `USERS`(`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PRODUCTS` ADD CONSTRAINT `PRODUCTS_category_id_fkey` FOREIGN KEY (`category_id`) REFERENCES `CATEGORIES`(`category_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PRODUCTS` ADD CONSTRAINT `PRODUCTS_supplier_id_fkey` FOREIGN KEY (`supplier_id`) REFERENCES `SUPPLIERS`(`supplier_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `INVENTORY` ADD CONSTRAINT `INVENTORY_product_id_fkey` FOREIGN KEY (`product_id`) REFERENCES `PRODUCTS`(`product_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `INVENTORY` ADD CONSTRAINT `INVENTORY_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `INVENTORY_MOVEMENTS` ADD CONSTRAINT `INVENTORY_MOVEMENTS_product_id_fkey` FOREIGN KEY (`product_id`) REFERENCES `PRODUCTS`(`product_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `INVENTORY_MOVEMENTS` ADD CONSTRAINT `INVENTORY_MOVEMENTS_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `INVENTORY_MOVEMENTS` ADD CONSTRAINT `INVENTORY_MOVEMENTS_recorded_by_fkey` FOREIGN KEY (`recorded_by`) REFERENCES `USERS`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SALES` ADD CONSTRAINT `SALES_customer_id_fkey` FOREIGN KEY (`customer_id`) REFERENCES `CUSTOMERS`(`customer_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SALES` ADD CONSTRAINT `SALES_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `USERS`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SALES` ADD CONSTRAINT `SALES_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SALE_ITEMS` ADD CONSTRAINT `SALE_ITEMS_sale_id_fkey` FOREIGN KEY (`sale_id`) REFERENCES `SALES`(`sale_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SALE_ITEMS` ADD CONSTRAINT `SALE_ITEMS_product_id_fkey` FOREIGN KEY (`product_id`) REFERENCES `PRODUCTS`(`product_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PAYMENTS` ADD CONSTRAINT `PAYMENTS_sale_id_fkey` FOREIGN KEY (`sale_id`) REFERENCES `SALES`(`sale_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `EXPENSES` ADD CONSTRAINT `EXPENSES_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `EXPENSES` ADD CONSTRAINT `EXPENSES_recorded_by_fkey` FOREIGN KEY (`recorded_by`) REFERENCES `USERS`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PURCHASE_REQUISITIONS` ADD CONSTRAINT `PURCHASE_REQUISITIONS_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PURCHASE_REQUISITIONS` ADD CONSTRAINT `PURCHASE_REQUISITIONS_requested_by_fkey` FOREIGN KEY (`requested_by`) REFERENCES `USERS`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PURCHASE_REQUISITIONS` ADD CONSTRAINT `PURCHASE_REQUISITIONS_product_id_fkey` FOREIGN KEY (`product_id`) REFERENCES `PRODUCTS`(`product_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PURCHASE_ORDERS` ADD CONSTRAINT `PURCHASE_ORDERS_supplier_id_fkey` FOREIGN KEY (`supplier_id`) REFERENCES `SUPPLIERS`(`supplier_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PURCHASE_ORDERS` ADD CONSTRAINT `PURCHASE_ORDERS_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PURCHASE_ORDERS` ADD CONSTRAINT `PURCHASE_ORDERS_requisition_id_fkey` FOREIGN KEY (`requisition_id`) REFERENCES `PURCHASE_REQUISITIONS`(`requisition_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `GOODS_RECEIPTS` ADD CONSTRAINT `GOODS_RECEIPTS_order_id_fkey` FOREIGN KEY (`order_id`) REFERENCES `PURCHASE_ORDERS`(`order_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `GOODS_RECEIPTS` ADD CONSTRAINT `GOODS_RECEIPTS_product_id_fkey` FOREIGN KEY (`product_id`) REFERENCES `PRODUCTS`(`product_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `GOODS_RECEIPTS` ADD CONSTRAINT `GOODS_RECEIPTS_received_by_fkey` FOREIGN KEY (`received_by`) REFERENCES `USERS`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `TENANT_SUBSCRIPTIONS` ADD CONSTRAINT `TENANT_SUBSCRIPTIONS_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `TENANT_SUBSCRIPTIONS` ADD CONSTRAINT `TENANT_SUBSCRIPTIONS_plan_id_fkey` FOREIGN KEY (`plan_id`) REFERENCES `SUBSCRIPTION_PLANS`(`plan_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SUBSCRIPTION_INVOICES` ADD CONSTRAINT `SUBSCRIPTION_INVOICES_subscription_id_fkey` FOREIGN KEY (`subscription_id`) REFERENCES `TENANT_SUBSCRIPTIONS`(`subscription_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SALES_REPORT` ADD CONSTRAINT `SALES_REPORT_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SALES_REPORT` ADD CONSTRAINT `SALES_REPORT_generated_by_fkey` FOREIGN KEY (`generated_by`) REFERENCES `USERS`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `INVENTORY_REPORT` ADD CONSTRAINT `INVENTORY_REPORT_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `INVENTORY_REPORT` ADD CONSTRAINT `INVENTORY_REPORT_generated_by_fkey` FOREIGN KEY (`generated_by`) REFERENCES `USERS`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `FINANCIAL_REPORT` ADD CONSTRAINT `FINANCIAL_REPORT_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `FINANCIAL_REPORT` ADD CONSTRAINT `FINANCIAL_REPORT_generated_by_fkey` FOREIGN KEY (`generated_by`) REFERENCES `USERS`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `REPORT_SCHEDULE` ADD CONSTRAINT `REPORT_SCHEDULE_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `BRANCHES`(`branch_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `REPORT_LOG` ADD CONSTRAINT `REPORT_LOG_generated_by_fkey` FOREIGN KEY (`generated_by`) REFERENCES `USERS`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `AUDIT_LOG` ADD CONSTRAINT `AUDIT_LOG_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `USERS`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `NOTIFICATIONS` ADD CONSTRAINT `NOTIFICATIONS_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `USERS`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
