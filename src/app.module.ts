@@ -6,6 +6,7 @@ import { BranchesModule } from './modules/branches/branches.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { ProductsModule } from './modules/products/products.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -17,6 +18,8 @@ import { AppController } from './app.controller';
     CategoriesModule,
     SuppliersModule,
     ProductsModule,
+    InventoryModule,
+    
   ],
   controllers: [AppController],
   providers: [],
