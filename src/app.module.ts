@@ -10,6 +10,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -24,7 +25,8 @@ import { AppController } from './app.controller';
     InventoryModule,
     SalesModule,
     CustomersModule,
-    PaymentsModule
+    PaymentsModule,
+    ExpensesModule
     
   ],
   controllers: [AppController],

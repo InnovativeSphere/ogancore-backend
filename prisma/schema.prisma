@@ -327,6 +327,7 @@ model Expense {
   expenseDate DateTime @map("expense_date")
   description String?  @db.Text
   recordedBy  Int      @map("recorded_by")
+  isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
 
   branch      Branch   @relation(fields: [branchId], references: [branchId])
