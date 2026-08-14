@@ -7,6 +7,7 @@ export class SeedService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
+    // 1. Seed all required roles
     const roles = [
       'SUPER_ADMIN',
       'ADMIN',
@@ -31,12 +32,12 @@ export class SeedService implements OnModuleInit {
       }
     }
 
-    const defaultBranch = await this.prisma.branch.findFirst({
+    // 2. Ensure there is at least one active branch
+    let defaultBranch = await this.prisma.branch.findFirst({
       where: { isActive: true },
     });
-
     if (!defaultBranch) {
-      await this.prisma.branch.create({
+      defaultBranch = await this.prisma.branch.create({
         data: {
           branchName: 'Head Office',
           address: 'Default branch',
@@ -44,24 +45,32 @@ export class SeedService implements OnModuleInit {
       });
     }
 
+    // 3. Ensure a default SUPER_ADMIN user exists (without duplicating usernames)
     const superAdminRole = await this.prisma.role.findFirst({
       where: { roleName: 'SUPER_ADMIN' },
     });
 
     if (superAdminRole) {
+      // Check if a super admin already exists by email or username
       const existingAdmin = await this.prisma.user.findFirst({
-        where: { roleId: superAdminRole.roleId },
+        where: {
+          OR: [
+            { email: 'admin@ogancore.com' },
+            { username: 'sysadmin' },
+          ],
+        },
       });
+
       if (!existingAdmin) {
         const passwordHash = await bcrypt.hash('Admin123!', 12);
         await this.prisma.user.create({
           data: {
             fullName: 'System Administrator',
-            username: 'admin',
+            username: 'sysadmin',
             email: 'admin@ogancore.com',
             passwordHash,
             roleId: superAdminRole.roleId,
-            branchId: (await this.prisma.branch.findFirst({ where: { isActive: true } }))?.branchId || 1,
+            branchId: defaultBranch.branchId,
             status: 'ACTIVE',
           },
         });
