@@ -34,6 +34,22 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
+    // Find the default low-privilege role
+    const defaultRole = await this.prisma.role.findFirst({
+      where: { roleName: 'USER' },
+    });
+    if (!defaultRole) {
+      throw new BadRequestException('Default role not found');
+    }
+
+    // Find the default branch
+    const defaultBranch = await this.prisma.branch.findFirst({
+  where: { isActive: true },
+});
+    if (!defaultBranch) {
+      throw new BadRequestException('Default branch not found');
+    }
+
     const user = await this.prisma.user.create({
       data: {
         fullName: dto.fullName,
@@ -41,8 +57,8 @@ export class AuthService {
         email: dto.email,
         phone: dto.phone,
         passwordHash,
-        roleId: 1,   // default – admin changes later
-        branchId: 1, // default – admin changes later
+        roleId: defaultRole.roleId,
+        branchId: defaultBranch.branchId,
       },
       select: {
         userId: true,
@@ -102,7 +118,6 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload);
 
-    // Cast options to 'any' to bypass strict expiresIn typing – same as Habitwise
     const refreshTokenOptions: any = {
       secret: process.env.JWT_REFRESH_SECRET,
       expiresIn: process.env.JWT_REFRESH_EXPIRATION || '7d',
@@ -170,12 +185,10 @@ export class AuthService {
     if (!user) {
       return { message: 'If that email is registered, a reset link has been sent.' };
     }
-    // TODO: generate reset token, store in PASSWORD_RESET_TOKENS, send email
     return { message: 'If that email is registered, a reset link has been sent.' };
   }
 
   async resetPassword(token: string, newPassword: string) {
-    // TODO: verify token, update password
     throw new BadRequestException('Password reset not yet implemented');
   }
 }
