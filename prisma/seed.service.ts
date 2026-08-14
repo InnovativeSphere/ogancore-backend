@@ -1,12 +1,12 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../src/prisma/prisma.service';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class SeedService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
-    // Seed all required roles
     const roles = [
       'SUPER_ADMIN',
       'ADMIN',
@@ -31,15 +31,41 @@ export class SeedService implements OnModuleInit {
       }
     }
 
-    // Seed default branch if none exists
-    const branchCount = await this.prisma.branch.count();
-    if (branchCount === 0) {
+    const defaultBranch = await this.prisma.branch.findFirst({
+      where: { isActive: true },
+    });
+
+    if (!defaultBranch) {
       await this.prisma.branch.create({
         data: {
           branchName: 'Head Office',
           address: 'Default branch',
         },
       });
+    }
+
+    const superAdminRole = await this.prisma.role.findFirst({
+      where: { roleName: 'SUPER_ADMIN' },
+    });
+
+    if (superAdminRole) {
+      const existingAdmin = await this.prisma.user.findFirst({
+        where: { roleId: superAdminRole.roleId },
+      });
+      if (!existingAdmin) {
+        const passwordHash = await bcrypt.hash('Admin123!', 12);
+        await this.prisma.user.create({
+          data: {
+            fullName: 'System Administrator',
+            username: 'admin',
+            email: 'admin@ogancore.com',
+            passwordHash,
+            roleId: superAdminRole.roleId,
+            branchId: (await this.prisma.branch.findFirst({ where: { isActive: true } }))?.branchId || 1,
+            status: 'ACTIVE',
+          },
+        });
+      }
     }
   }
 }
