@@ -7,6 +7,11 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Global API prefix – e.g., /api/products, /api/sales
+  app.setGlobalPrefix('api');
+
+  // Enable CORS for frontend access
   app.enableCors();
 
   // Swagger setup
@@ -18,7 +23,7 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);       // UI at /api/docs
+  SwaggerModule.setup('api/docs', app, document); // UI at /api/docs
 
   await app.listen(process.env.PORT ?? 3000);
 }
