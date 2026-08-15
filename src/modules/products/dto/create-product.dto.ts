@@ -1,27 +1,27 @@
 import {
-  IsString, IsOptional, IsInt, IsDecimal, IsPositive, Min, MinLength, MaxLength,
+  IsString,
+  IsOptional,
+  IsInt,
+  IsDecimal,
+  Min,
+  MaxLength,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 
 export class CreateProductDto {
-  @ApiProperty({ description: 'Product name', example: 'Coca-Cola 50cl' })
+  @ApiProperty({ description: 'Product name', example: 'Indomie Noodles' })
   @IsString()
-  @MinLength(2)
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
-  productName!: string;
+  name!: string;   // frontend sends "name"; we map to productName in service
 
-  @ApiProperty({ description: 'Category ID', example: 1 })
-  @IsInt()
-  @Type(() => Number)
-  categoryId!: number;
-
-  @ApiPropertyOptional({ description: 'Supplier ID', example: 1 })
+  @ApiPropertyOptional({ description: 'Stock Keeping Unit (internal)', example: 'ABC123' })
   @IsOptional()
-  @IsInt()
-  @Type(() => Number)
-  supplierId?: number;
+  @IsString()
+  @MaxLength(50)
+  sku?: string;
 
   @ApiPropertyOptional({ description: 'Barcode (UPC/EAN)', example: '123456789012' })
   @IsOptional()
@@ -29,35 +29,77 @@ export class CreateProductDto {
   @MaxLength(50)
   barcode?: string;
 
-  @ApiPropertyOptional({ description: 'Stock Keeping Unit (internal)', example: 'CC-50CL' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  sku?: string;
-
   @ApiPropertyOptional({ description: 'Product description' })
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ApiProperty({ description: 'Cost price', example: 150.00 })
+  @ApiProperty({ description: 'Category ID', example: 1 })
+  @IsInt()
+  @Type(() => Number)
+  categoryId!: number;
+
+  @ApiPropertyOptional({ description: 'Brand ID or name', example: 'brand_01' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  brandId?: string;
+
+  @ApiPropertyOptional({ description: 'Unit of measurement', example: 'Carton' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  unit?: string;
+
+  @ApiProperty({ description: 'Cost price', example: 8500 })
   @IsDecimal({ decimal_digits: '0,2' })
   @Type(() => Number)
   costPrice!: number;
 
-  @ApiProperty({ description: 'Selling price', example: 200.00 })
+  @ApiProperty({ description: 'Selling price', example: 10500 })
   @IsDecimal({ decimal_digits: '0,2' })
   @Type(() => Number)
   sellingPrice!: number;
 
-  @ApiPropertyOptional({ description: 'Reorder level', default: 0, example: 10 })
+  @ApiPropertyOptional({ description: 'Wholesale price', example: 9500 })
+  @IsOptional()
+  @IsDecimal({ decimal_digits: '0,2' })
+  @Type(() => Number)
+  wholesalePrice?: number;
+
+  @ApiPropertyOptional({ description: 'Tax rate (%)', example: 7.5 })
+  @IsOptional()
+  @IsDecimal({ decimal_digits: '0,2' })
+  @Type(() => Number)
+  taxRate?: number;
+
+  @ApiPropertyOptional({ description: 'Default discount', example: 0 })
+  @IsOptional()
+  @IsDecimal({ decimal_digits: '0,2' })
+  @Type(() => Number)
+  discount?: number;
+
+  @ApiPropertyOptional({ description: 'Image URL', example: 'https://example.com/image.jpg' })
+  @IsOptional()
+  @IsString()
+  image?: string;
+
+  @ApiPropertyOptional({
+    description: 'Stock alert level (maps to reorder level)',
+    example: 50,
+  })
   @IsOptional()
   @IsInt()
   @Min(0)
   @Type(() => Number)
-  reorderLevel?: number;
+  stockAlertLevel?: number;
 
-  @ApiPropertyOptional({ description: 'Initial status', default: 'active', example: 'active' })
+  @ApiPropertyOptional({ description: 'Track inventory flag', default: true })
+  @IsOptional()
+  @IsBoolean()
+  trackInventory?: boolean;
+
+  @ApiPropertyOptional({ description: 'Product status', default: 'active', example: 'active' })
   @IsOptional()
   @IsString()
   status?: string;

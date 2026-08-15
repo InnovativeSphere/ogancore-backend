@@ -196,6 +196,13 @@ model Product {
   costPrice             Decimal                  @db.Decimal(10,2) @map("cost_price")
   sellingPrice          Decimal                  @db.Decimal(10,2) @map("selling_price")
   reorderLevel          Int                      @default(0) @map("reorder_level")
+  brandId        String?   @db.VarChar(50) @map("brand_id")
+  unit           String?   @db.VarChar(20)
+  wholesalePrice Decimal?  @db.Decimal(10,2) @map("wholesale_price")
+  taxRate        Decimal?  @db.Decimal(5,2) @map("tax_rate")
+  discount       Decimal?  @db.Decimal(10,2)
+  image          String?   @db.Text
+  trackInventory Boolean   @default(true) @map("track_inventory")
   status                String                   @default("active") @db.VarChar(20)
   createdAt             DateTime                 @default(now()) @map("created_at")
 
@@ -260,6 +267,8 @@ model Sale {
   tax           Decimal    @default(0) @db.Decimal(10,2)
   grandTotal    Decimal    @db.Decimal(10,2) @map("grand_total")
   status        String     @default("completed") @db.VarChar(20)
+  posId          String?   @db.VarChar(50) @map("pos_id")
+  notes          String?   @db.Text
   createdAt     DateTime   @default(now()) @map("created_at")
 
   customer      Customer?  @relation(fields: [customerId], references: [customerId])
@@ -279,6 +288,8 @@ model SaleItem {
   quantity   Int
   unitPrice  Decimal @db.Decimal(10,2) @map("unit_price")
   totalPrice Decimal @db.Decimal(10,2) @map("total_price")
+  tax            Decimal?  @db.Decimal(10,2)
+  discount       Decimal?  @db.Decimal(10,2)
 
   sale       Sale    @relation(fields: [saleId], references: [saleId], onDelete: Cascade)
   product    Product @relation(fields: [productId], references: [productId])
