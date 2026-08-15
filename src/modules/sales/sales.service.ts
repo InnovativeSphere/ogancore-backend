@@ -16,10 +16,6 @@ import { MovementType, PaymentMethod } from '@prisma/client';
 export class SalesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Create a complete sale with items and payments atomically.
-   * Deducts inventory, logs movements, and generates an invoice number.
-   */
   async create(userId: number, dto: CreateSaleDto) {
     return this.prisma.$transaction(async (tx) => {
       // 1. Validate branch
@@ -47,9 +43,13 @@ export class SalesService {
         quantity: number;
         unitPrice: number;
         totalPrice: number;
+        discount: number;
+        tax: number;
       }> = [];
 
       let subtotal = 0;
+      let totalDiscount = 0;
+      let totalTax = 0;
 
       for (const item of dto.items) {
         const product = await tx.product.findUnique({
@@ -60,75 +60,83 @@ export class SalesService {
           throw new BadRequestException(`Product ${item.productId} not found`);
         }
 
-        // Check product status
         if (product.status !== 'active') {
-          throw new BadRequestException(
-            `Product ${item.productId} is not active`,
-          );
+          throw new BadRequestException(`Product ${item.productId} is not active`);
         }
 
-        // Use provided unit price or fall back to product selling price
         const unitPrice =
           item.unitPrice !== undefined
             ? Number(item.unitPrice)
             : Number(product.sellingPrice);
 
-        const totalPrice = unitPrice * item.quantity;
-        subtotal += totalPrice;
+        const quantity = item.quantity;
+        const lineTotal = unitPrice * quantity;
+        const lineDiscount = item.discount ? Number(item.discount) : 0;
+        const lineTax = item.tax ? Number(item.tax) : 0;
+
+        subtotal += lineTotal;
+        totalDiscount += lineDiscount;
+        totalTax += lineTax;
 
         builtItems.push({
           productId: item.productId,
-          quantity: item.quantity,
+          quantity,
           unitPrice,
-          totalPrice,
+          totalPrice: lineTotal,
+          discount: lineDiscount,
+          tax: lineTax,
         });
       }
 
-      // 5. Apply discount and tax
-      const discount = dto.discount ? Number(dto.discount) : 0;
-      const tax = dto.tax ? Number(dto.tax) : 0;
-      const grandTotal = subtotal - discount + tax;
+      // 5. Calculate grand total
+      const grandTotal = subtotal - totalDiscount + totalTax;
 
-      // 6. Validate payments
-      const totalPaid = dto.payments.reduce(
+      // 6. Build payments
+      const paymentsToCreate: CreatePaymentEntryDto[] = dto.payments && dto.payments.length > 0
+        ? dto.payments
+        : dto.paymentMethod
+          ? [{ paymentMethod: dto.paymentMethod, amount: grandTotal }]
+          : [];
+
+      if (paymentsToCreate.length === 0) {
+        throw new BadRequestException('Payment information is required');
+      }
+
+      const totalPaid = paymentsToCreate.reduce(
         (sum, p) => sum + Number(p.amount),
         0,
       );
 
+      // 7. Validate credit sale
       if (totalPaid < grandTotal && !dto.customerId) {
-        throw new BadRequestException(
-          'Customer is required for credit sales',
-        );
+        throw new BadRequestException('Customer is required for credit sales');
       }
 
-      if (totalPaid > grandTotal) {
-        throw new BadRequestException(
-          'Total payments cannot exceed grand total',
-        );
-      }
+      const change = totalPaid > grandTotal ? totalPaid - grandTotal : 0;
 
-      // 7. Generate unique invoice number
-      const invoiceNumber = `OGAN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      // 8. Generate transaction number
+      const transactionNumber = `OGAN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-      // 8. Create the sale
+      // 9. Create sale
       const sale = await tx.sale.create({
         data: {
-          invoiceNumber,
+          invoiceNumber: transactionNumber,
           customerId: dto.customerId ?? null,
           userId,
           branchId: dto.branchId,
           saleDate: new Date(),
           totalAmount: subtotal,
-          discount,
-          tax,
+          discount: totalDiscount,
+          tax: totalTax,
           grandTotal,
+          posId: dto.posId,
+          notes: dto.notes,
           status: 'completed',
         },
       });
 
-      // 9. Create sale items and deduct inventory
+      // 10. Create sale items and deduct inventory
       for (const item of builtItems) {
-        // Get current inventory for this product at this branch
         const inventory = await tx.inventory.findUnique({
           where: {
             productId_branchId: {
@@ -147,13 +155,11 @@ export class SalesService {
         const quantityBefore = inventory.quantity;
         const quantityAfter = quantityBefore - item.quantity;
 
-        // Update inventory
         await tx.inventory.update({
           where: { inventoryId: inventory.inventoryId },
           data: { quantity: quantityAfter },
         });
 
-        // Create movement log
         await tx.inventoryMovement.create({
           data: {
             productId: item.productId,
@@ -165,11 +171,10 @@ export class SalesService {
             recordedBy: userId,
             referenceId: sale.saleId,
             referenceTable: 'SALES',
-            note: `Sale ${invoiceNumber}`,
+            note: `Sale ${transactionNumber}`,
           },
         });
 
-        // Create sale item
         await tx.saleItem.create({
           data: {
             saleId: sale.saleId,
@@ -177,14 +182,14 @@ export class SalesService {
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             totalPrice: item.totalPrice,
+            discount: item.discount,
+            tax: item.tax,
           },
         });
       }
 
-      // 10. Create payments
-      const payments = [];
-            // 10. Create payments
-      for (const payment of dto.payments) {
+      // 11. Create payments
+      for (const payment of paymentsToCreate) {
         await tx.payment.create({
           data: {
             saleId: sale.saleId,
@@ -197,7 +202,7 @@ export class SalesService {
         });
       }
 
-      // 11. Create audit log
+      // 12. Audit log
       await tx.auditLog.create({
         data: {
           userId,
@@ -208,8 +213,8 @@ export class SalesService {
         },
       });
 
-      // 12. Return fully hydrated sale
-      return tx.sale.findUnique({
+      // 13. Return fully hydrated sale with computed fields
+      const fullSale = await tx.sale.findUnique({
         where: { saleId: sale.saleId },
         include: {
           branch: true,
@@ -232,17 +237,54 @@ export class SalesService {
           payments: true,
         },
       });
+
+      return {
+        ...fullSale,
+        transactionNumber,
+        subtotal,
+        totalDiscount,
+        totalTax,
+        amountPaid: totalPaid,
+        change,
+      };
     });
   }
 
-  /**
-   * List sales, optionally filtered by branch.
-   */
-  async findAll(branchId?: number) {
+  async findAll(filters?: {
+    branchId?: number;
+    dateFrom?: string;
+    dateTo?: string;
+    cashierId?: number;
+    posId?: string;
+    paymentMethod?: PaymentMethod;
+    status?: string;
+    search?: string;
+  }) {
     const where: any = {};
-    if (branchId) {
-      where.branchId = branchId;
+
+    if (filters?.branchId) where.branchId = filters.branchId;
+    if (filters?.cashierId) where.userId = filters.cashierId;
+    if (filters?.posId) where.posId = filters.posId;
+    if (filters?.status) where.status = filters.status;
+
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.saleDate = {};
+      if (filters.dateFrom) where.saleDate.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.saleDate.lte = new Date(filters.dateTo);
     }
+
+    if (filters?.search) {
+      where.OR = [
+        { invoiceNumber: { contains: filters.search } },
+        { notes: { contains: filters.search } },
+        { customer: { name: { contains: filters.search } } },
+      ];
+    }
+
+    if (filters?.paymentMethod) {
+      where.payments = { some: { paymentMethod: filters.paymentMethod } };
+    }
+
     return this.prisma.sale.findMany({
       where,
       orderBy: { saleDate: 'desc' },
@@ -252,15 +294,22 @@ export class SalesService {
         cashier: {
           select: { userId: true, fullName: true, username: true },
         },
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: { productId: true, productName: true, sku: true, barcode: true },
+            },
+          },
+        },
         payments: true,
       },
     });
   }
 
-  /**
-   * Get a single sale with full details.
-   */
+  async search(q: string) {
+    return this.findAll({ search: q });
+  }
+
   async findOne(id: number) {
     const sale = await this.prisma.sale.findUnique({
       where: { saleId: id },
@@ -273,12 +322,7 @@ export class SalesService {
         items: {
           include: {
             product: {
-              select: {
-                productId: true,
-                productName: true,
-                sku: true,
-                barcode: true,
-              },
+              select: { productId: true, productName: true, sku: true, barcode: true },
             },
           },
         },
@@ -289,9 +333,6 @@ export class SalesService {
     return sale;
   }
 
-  /**
-   * Full refund — reverses inventory and marks sale as refunded.
-   */
   async refund(id: number, userId: number, dto: RefundSaleDto) {
     return this.prisma.$transaction(async (tx) => {
       const sale = await tx.sale.findUnique({
@@ -303,7 +344,6 @@ export class SalesService {
         throw new BadRequestException('Sale already refunded');
       }
 
-      // Reverse inventory for each item
       for (const item of sale.items) {
         const inventory = await tx.inventory.findUnique({
           where: {
@@ -315,7 +355,6 @@ export class SalesService {
         });
 
         if (!inventory) {
-          // If no inventory row, create one with the refunded quantity
           await tx.inventory.create({
             data: {
               productId: item.productId,
@@ -361,13 +400,11 @@ export class SalesService {
         }
       }
 
-      // Mark sale as refunded
       await tx.sale.update({
         where: { saleId: sale.saleId },
         data: { status: 'refunded' },
       });
 
-      // Audit log
       await tx.auditLog.create({
         data: {
           userId,
@@ -380,12 +417,7 @@ export class SalesService {
 
       return tx.sale.findUnique({
         where: { saleId: sale.saleId },
-        include: {
-          items: true,
-          payments: true,
-          branch: true,
-          customer: true,
-        },
+        include: { items: true, payments: true, branch: true, customer: true },
       });
     });
   }

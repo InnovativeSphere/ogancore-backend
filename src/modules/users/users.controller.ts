@@ -9,7 +9,12 @@ import {
   ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -24,7 +29,6 @@ import { GetUser } from '../../common/decorators/get-user.decorator';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // ─── Self‑profile ────────────────────────────────────
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -56,10 +60,9 @@ export class UsersController {
     return this.usersService.changePassword(userId, dto);
   }
 
-  // ─── Admin routes ────────────────────────────────────
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')                     // adjust role name as seeded
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List all users (admin only)' })
   findAll() {
@@ -68,7 +71,7 @@ export class UsersController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a user (admin only)' })
   create(@Body() dto: CreateUserDto) {
@@ -77,7 +80,7 @@ export class UsersController {
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update any user (admin only)' })
   update(
@@ -89,7 +92,7 @@ export class UsersController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Deactivate a user (admin only)' })
   remove(@Param('id', ParseIntPipe) id: number) {

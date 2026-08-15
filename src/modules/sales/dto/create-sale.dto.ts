@@ -8,17 +8,29 @@ import {
   MaxLength,
   ValidateNested,
   IsArray,
+  ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentMethod } from '@prisma/client';
 
-// Individual item within a sale
 export class CreateSaleItemDto {
   @ApiProperty({ description: 'Product ID', example: 1 })
   @IsInt()
   @Type(() => Number)
   productId!: number;
+
+  @ApiPropertyOptional({ description: 'Product name (for reference)', example: 'Indomie Noodles' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  productName?: string;
+
+  @ApiPropertyOptional({ description: 'SKU (for reference)', example: 'ABC123' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  sku?: string;
 
   @ApiProperty({ description: 'Quantity sold', example: 2 })
   @IsInt()
@@ -26,20 +38,31 @@ export class CreateSaleItemDto {
   @Type(() => Number)
   quantity!: number;
 
-  @ApiPropertyOptional({ description: 'Unit price (defaults to product selling price if omitted)' })
+  @ApiPropertyOptional({ description: 'Unit price (defaults to product selling price if omitted)', example: 10500 })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Type(() => Number)
   unitPrice?: number;
+
+  @ApiPropertyOptional({ description: 'Per-item discount (flat)', example: 0 })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Type(() => Number)
+  discount?: number;
+
+  @ApiPropertyOptional({ description: 'Per-item tax (flat)', example: 0 })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Type(() => Number)
+  tax?: number;
 }
 
-// Individual payment within a sale
 export class CreatePaymentEntryDto {
   @ApiProperty({ enum: PaymentMethod, example: 'CASH' })
   @IsEnum(PaymentMethod)
   paymentMethod!: PaymentMethod;
 
-  @ApiProperty({ description: 'Amount paid', example: 5000 })
+  @ApiProperty({ description: 'Amount paid', example: 10500 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Type(() => Number)
   amount!: number;
@@ -51,40 +74,46 @@ export class CreatePaymentEntryDto {
   referenceNumber?: string;
 }
 
-// Main sale creation DTO
 export class CreateSaleDto {
   @ApiProperty({ description: 'Branch ID', example: 1 })
   @IsInt()
   @Type(() => Number)
   branchId!: number;
 
-  @ApiPropertyOptional({ description: 'Customer ID (required for credit sales)', example: 5 })
+  @ApiPropertyOptional({ description: 'Customer ID (required for credit sales)', example: 1 })
   @IsOptional()
   @IsInt()
   @Type(() => Number)
   customerId?: number;
 
-  @ApiPropertyOptional({ description: 'Discount amount (flat)', example: 200, default: 0 })
+  @ApiPropertyOptional({ description: 'POS terminal ID', example: 'pos_01' })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Type(() => Number)
-  discount?: number;
+  @IsString()
+  @MaxLength(50)
+  posId?: string;
 
-  @ApiPropertyOptional({ description: 'Tax amount (flat)', example: 150, default: 0 })
+  @ApiPropertyOptional({ description: 'Sale notes', example: 'Walk-in customer' })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Type(() => Number)
-  tax?: number;
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+
+  @ApiPropertyOptional({ description: 'Single payment method (used if payments array is not provided)', enum: PaymentMethod, example: 'CASH' })
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
 
   @ApiProperty({ description: 'Sale items', type: [CreateSaleItemDto] })
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => CreateSaleItemDto)
   items!: CreateSaleItemDto[];
 
-  @ApiProperty({ description: 'Payments received', type: [CreatePaymentEntryDto] })
+  @ApiPropertyOptional({ description: 'Split payments (optional; if omitted, a single full payment is created using paymentMethod)', type: [CreatePaymentEntryDto] })
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreatePaymentEntryDto)
-  payments!: CreatePaymentEntryDto[];
+  payments?: CreatePaymentEntryDto[];
 }

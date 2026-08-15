@@ -44,7 +44,7 @@ export class ExpensesController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Soft-delete an expense (admin only)' })
   remove(@Param('id', ParseIntPipe) id: number) {

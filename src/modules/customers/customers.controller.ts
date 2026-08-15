@@ -50,7 +50,7 @@ export class CustomersController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Deactivate a customer (admin only)' })
   remove(@Param('id', ParseIntPipe) id: number) {

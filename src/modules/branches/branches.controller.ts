@@ -17,7 +17,7 @@ export class BranchesController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new branch (admin only)' })
   create(@Body() dto: CreateBranchDto) {
@@ -34,7 +34,7 @@ export class BranchesController {
 
   @Get('all')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List all branches including inactive (admin only)' })
   findAll() {
@@ -51,7 +51,7 @@ export class BranchesController {
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a branch (admin only)' })
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateBranchDto) {
@@ -60,7 +60,7 @@ export class BranchesController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Deactivate a branch (admin only)' })
   remove(@Param('id', ParseIntPipe) id: number) {

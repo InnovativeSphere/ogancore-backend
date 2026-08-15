@@ -17,7 +17,7 @@ export class SuppliersController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a supplier (admin only)' })
   create(@Body() dto: CreateSupplierDto) {
@@ -43,19 +43,16 @@ export class SuppliersController {
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a supplier (admin only)' })
-  update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateSupplierDto,
-  ) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateSupplierDto) {
     return this.suppliersService.update(id, dto);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a supplier (soft if in use, hard if empty)' })
   remove(@Param('id', ParseIntPipe) id: number) {

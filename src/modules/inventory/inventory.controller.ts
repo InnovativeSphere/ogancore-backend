@@ -33,49 +33,37 @@ export class InventoryController {
 
   @Post('stock-in')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Receive stock (admin only)' })
-  stockIn(
-    @GetUser('userId') userId: number,
-    @Body() dto: StockInDto,
-  ) {
+  stockIn(@GetUser('userId') userId: number, @Body() dto: StockInDto) {
     return this.inventoryService.stockIn(userId, dto);
   }
 
   @Post('stock-out')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Remove stock without a sale (admin only)' })
-  stockOut(
-    @GetUser('userId') userId: number,
-    @Body() dto: StockOutDto,
-  ) {
+  stockOut(@GetUser('userId') userId: number, @Body() dto: StockOutDto) {
     return this.inventoryService.stockOut(userId, dto);
   }
 
   @Post('transfer')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Transfer stock between branches (admin only)' })
-  transfer(
-    @GetUser('userId') userId: number,
-    @Body() dto: TransferDto,
-  ) {
+  transfer(@GetUser('userId') userId: number, @Body() dto: TransferDto) {
     return this.inventoryService.transfer(userId, dto);
   }
 
   @Post('adjust')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Admin')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Manually adjust stock (admin only)' })
-  adjust(
-    @GetUser('userId') userId: number,
-    @Body() dto: AdjustDto,
-  ) {
+  adjust(@GetUser('userId') userId: number, @Body() dto: AdjustDto) {
     return this.inventoryService.adjust(userId, dto);
   }
 
