@@ -12,6 +12,7 @@ import { CustomersModule } from './modules/customers/customers.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { CartModule } from './modules/cart/cart.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -28,7 +29,8 @@ import { AppController } from './app.controller';
     CustomersModule,
     PaymentsModule,
     ExpensesModule,
-    AnalyticsModule
+    AnalyticsModule,
+    CartModule
     
   ],
   controllers: [AppController],

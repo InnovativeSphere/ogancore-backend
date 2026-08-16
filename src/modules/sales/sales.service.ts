@@ -10,21 +10,33 @@ import {
   CreatePaymentEntryDto,
 } from './dto/create-sale.dto';
 import { RefundSaleDto } from './dto/refund-sale.dto';
-import { MovementType, PaymentMethod } from '@prisma/client';
+import {
+  MovementType,
+  PaymentMethod,
+  SaleStatus,
+  PaymentStatus,
+} from '@prisma/client';
 
 @Injectable()
 export class SalesService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private computePaymentStatus(
+    grandTotal: number,
+    totalPaid: number,
+  ): PaymentStatus {
+    if (totalPaid >= grandTotal) return PaymentStatus.PAID;
+    if (totalPaid > 0) return PaymentStatus.PARTIALLY_PAID;
+    return PaymentStatus.UNPAID;
+  }
+
   async create(userId: number, dto: CreateSaleDto) {
     return this.prisma.$transaction(async (tx) => {
-      // 1. Validate branch
       const branch = await tx.branch.findUnique({
         where: { branchId: dto.branchId },
       });
       if (!branch) throw new BadRequestException('Branch not found');
 
-      // 2. Validate customer if provided
       if (dto.customerId) {
         const customer = await tx.customer.findUnique({
           where: { customerId: dto.customerId },
@@ -32,12 +44,11 @@ export class SalesService {
         if (!customer) throw new BadRequestException('Customer not found');
       }
 
-      // 3. Validate items exist
       if (!dto.items || dto.items.length === 0) {
         throw new BadRequestException('Sale must contain at least one item');
       }
 
-      // 4. Build line items and calculate totals
+      // Build items and calculate totals
       const builtItems: Array<{
         productId: number;
         quantity: number;
@@ -55,20 +66,19 @@ export class SalesService {
         const product = await tx.product.findUnique({
           where: { productId: item.productId },
         });
-
         if (!product) {
           throw new BadRequestException(`Product ${item.productId} not found`);
         }
-
         if (product.status !== 'active') {
-          throw new BadRequestException(`Product ${item.productId} is not active`);
+          throw new BadRequestException(
+            `Product ${item.productId} is not active`,
+          );
         }
 
         const unitPrice =
           item.unitPrice !== undefined
             ? Number(item.unitPrice)
             : Number(product.sellingPrice);
-
         const quantity = item.quantity;
         const lineTotal = unitPrice * quantity;
         const lineDiscount = item.discount ? Number(item.discount) : 0;
@@ -88,15 +98,15 @@ export class SalesService {
         });
       }
 
-      // 5. Calculate grand total
       const grandTotal = subtotal - totalDiscount + totalTax;
 
-      // 6. Build payments
-      const paymentsToCreate: CreatePaymentEntryDto[] = dto.payments && dto.payments.length > 0
-        ? dto.payments
-        : dto.paymentMethod
-          ? [{ paymentMethod: dto.paymentMethod, amount: grandTotal }]
-          : [];
+      // Build payments
+      const paymentsToCreate: CreatePaymentEntryDto[] =
+        dto.payments && dto.payments.length > 0
+          ? dto.payments
+          : dto.paymentMethod
+            ? [{ paymentMethod: dto.paymentMethod, amount: grandTotal }]
+            : [];
 
       if (paymentsToCreate.length === 0) {
         throw new BadRequestException('Payment information is required');
@@ -107,17 +117,22 @@ export class SalesService {
         0,
       );
 
-      // 7. Validate credit sale
       if (totalPaid < grandTotal && !dto.customerId) {
         throw new BadRequestException('Customer is required for credit sales');
       }
 
       const change = totalPaid > grandTotal ? totalPaid - grandTotal : 0;
 
-      // 8. Generate transaction number
-      const transactionNumber = `OGAN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      // Determine sale status based on payment
+      let saleStatus: SaleStatus = SaleStatus.COMPLETED;
+      if (totalPaid < grandTotal && totalPaid > 0) {
+        saleStatus = SaleStatus.PENDING;
+      } else if (totalPaid === 0) {
+        saleStatus = SaleStatus.PENDING; // or DRAFT? We'll use PENDING for unpaid credit sale
+      }
 
-      // 9. Create sale
+      const transactionNumber = `TXN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
       const sale = await tx.sale.create({
         data: {
           invoiceNumber: transactionNumber,
@@ -130,12 +145,13 @@ export class SalesService {
           tax: totalTax,
           grandTotal,
           posId: dto.posId,
+          sessionId: dto.sessionId,
           notes: dto.notes,
-          status: 'completed',
+          status: saleStatus,
         },
       });
 
-      // 10. Create sale items and deduct inventory
+      // Create sale items and deduct inventory
       for (const item of builtItems) {
         const inventory = await tx.inventory.findUnique({
           where: {
@@ -188,21 +204,23 @@ export class SalesService {
         });
       }
 
-      // 11. Create payments
+      // Create payments
+      const createdPayments: any[] = [];
       for (const payment of paymentsToCreate) {
-        await tx.payment.create({
+        const created = await tx.payment.create({
           data: {
             saleId: sale.saleId,
             paymentMethod: payment.paymentMethod,
             amount: Number(payment.amount),
             paymentDate: new Date(),
             referenceNumber: payment.referenceNumber,
-            status: 'completed',
+            status: PaymentStatus.PAID,
+            currency: 'NGN',
           },
         });
+        createdPayments.push(created);
       }
 
-      // 12. Audit log
       await tx.auditLog.create({
         data: {
           userId,
@@ -213,15 +231,12 @@ export class SalesService {
         },
       });
 
-      // 13. Return fully hydrated sale with computed fields
       const fullSale = await tx.sale.findUnique({
         where: { saleId: sale.saleId },
         include: {
           branch: true,
           customer: true,
-          cashier: {
-            select: { userId: true, fullName: true, username: true },
-          },
+          cashier: { select: { userId: true, fullName: true, username: true } },
           items: {
             include: {
               product: {
@@ -238,14 +253,54 @@ export class SalesService {
         },
       });
 
+      const paymentStatus = this.computePaymentStatus(grandTotal, totalPaid);
+
       return {
-        ...fullSale,
-        transactionNumber,
-        subtotal,
-        totalDiscount,
-        totalTax,
-        amountPaid: totalPaid,
-        change,
+        sale: {
+          id: fullSale!.saleId,
+          transactionNumber,
+          branchId: fullSale!.branchId,
+          posId: fullSale!.posId,
+          sessionId: fullSale!.sessionId,
+          cashierId: fullSale!.userId,
+          customerId: fullSale!.customerId,
+          subtotal,
+          discount: totalDiscount,
+          tax: totalTax,
+          total: grandTotal,
+          amountPaid: totalPaid,
+          change,
+          paymentStatus,
+          saleStatus: fullSale!.status,
+          createdAt: fullSale!.saleDate,
+        },
+        items: fullSale!.items.map((item) => ({
+          productId: item.productId,
+          productName: item.product.productName,
+          sku: item.product.sku,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          discount: Number(item.discount),
+          total: Number(item.totalPrice),
+        })),
+        payment: createdPayments[0]
+          ? {
+              id: createdPayments[0].paymentId,
+              reference: createdPayments[0].referenceNumber,
+              method: createdPayments[0].paymentMethod,
+              amount: Number(createdPayments[0].amount),
+              change,
+              status: createdPayments[0].status,
+            }
+          : null,
+        stats: {
+          transactionTotal: grandTotal,
+          grossProfit: 0, // we could compute later if needed
+          itemsSold: builtItems.reduce((sum, i) => sum + i.quantity, 0),
+          totalSalesToday: 0,
+          totalTransactionsToday: 0,
+          averageTransactionValue: 0,
+        },
       };
     });
   }
@@ -258,21 +313,16 @@ export class SalesService {
     posId?: string;
     paymentMethod?: PaymentMethod;
     status?: string;
+    paymentStatus?: string;
     search?: string;
+    page?: number;
+    limit?: number;
   }) {
     const where: any = {};
-
     if (filters?.branchId) where.branchId = filters.branchId;
     if (filters?.cashierId) where.userId = filters.cashierId;
     if (filters?.posId) where.posId = filters.posId;
     if (filters?.status) where.status = filters.status;
-
-    if (filters?.dateFrom || filters?.dateTo) {
-      where.saleDate = {};
-      if (filters.dateFrom) where.saleDate.gte = new Date(filters.dateFrom);
-      if (filters.dateTo) where.saleDate.lte = new Date(filters.dateTo);
-    }
-
     if (filters?.search) {
       where.OR = [
         { invoiceNumber: { contains: filters.search } },
@@ -280,30 +330,138 @@ export class SalesService {
         { customer: { name: { contains: filters.search } } },
       ];
     }
-
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.saleDate = {};
+      if (filters.dateFrom) where.saleDate.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.saleDate.lte = new Date(filters.dateTo);
+    }
     if (filters?.paymentMethod) {
       where.payments = { some: { paymentMethod: filters.paymentMethod } };
     }
 
-    return this.prisma.sale.findMany({
+    const sales = await this.prisma.sale.findMany({
       where,
-      orderBy: { saleDate: 'desc' },
       include: {
-        branch: true,
         customer: true,
-        cashier: {
-          select: { userId: true, fullName: true, username: true },
-        },
+        payments: true,
         items: {
           include: {
             product: {
-              select: { productId: true, productName: true, sku: true, barcode: true },
+              select: {
+                productId: true,
+                productName: true,
+                sku: true,
+                barcode: true,
+              },
             },
           },
         },
-        payments: true,
+        cashier: { select: { userId: true, fullName: true, username: true } },
+        branch: true,
       },
+      orderBy: { saleDate: 'desc' },
     });
+
+    // Filter by paymentStatus after fetching
+    let filteredSales = sales;
+    if (filters?.paymentStatus) {
+      filteredSales = sales.filter((sale) => {
+        const totalPaid = sale.payments.reduce(
+          (sum, p) => sum + Number(p.amount),
+          0,
+        );
+        const status = this.computePaymentStatus(
+          Number(sale.grandTotal),
+          totalPaid,
+        );
+        return status === filters.paymentStatus;
+      });
+    }
+
+    // Pagination
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const total = filteredSales.length;
+    const totalPages = Math.ceil(total / limit);
+    const start = (page - 1) * limit;
+    const paginatedSales = filteredSales.slice(start, start + limit);
+
+    const transactions = paginatedSales.map((sale) => {
+      const totalPaid = sale.payments.reduce(
+        (sum, p) => sum + Number(p.amount),
+        0,
+      );
+      const outstandingAmount = Number(sale.grandTotal) - totalPaid;
+      const paymentStatus = this.computePaymentStatus(
+        Number(sale.grandTotal),
+        totalPaid,
+      );
+      return {
+        id: sale.saleId,
+        transactionNumber: sale.invoiceNumber,
+        branchId: sale.branchId,
+        posId: sale.posId,
+        sessionId: sale.sessionId,
+        cashier: sale.cashier,
+        customer: sale.customer
+          ? {
+              id: sale.customer.customerId,
+              name: sale.customer.name,
+              phone: sale.customer.phone,
+            }
+          : null,
+        items: sale.items.map((item) => ({
+          productId: item.productId,
+          productName: item.product?.productName ?? '',
+          sku: item.product?.sku ?? '',
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          discount: Number(item.discount),
+          tax: Number(item.tax),
+          total: Number(item.totalPrice),
+        })),
+        subtotal: Number(sale.totalAmount),
+        discount: Number(sale.discount),
+        tax: Number(sale.tax),
+        total: Number(sale.grandTotal),
+        amountPaid: totalPaid,
+        outstandingAmount,
+        paymentStatus,
+        saleStatus: sale.status,
+        createdAt: sale.saleDate,
+      };
+    });
+
+    const allSales = sales; // for stats
+    const totalSales = allSales.reduce(
+      (sum, s) => sum + Number(s.grandTotal),
+      0,
+    );
+    const grossProfit = 0; // simplified, compute later
+    const totalItemsSold = allSales.reduce(
+      (sum, s) => sum + s.items.reduce((is, it) => is + it.quantity, 0),
+      0,
+    );
+    const averageTransactionValue =
+      allSales.length > 0 ? totalSales / allSales.length : 0;
+
+    return {
+      transactions,
+      stats: {
+        totalSales,
+        totalTransactions: allSales.length,
+        grossProfit,
+        totalItemsSold,
+        averageTransactionValue,
+        totalDiscount: allSales.reduce((sum, s) => sum + Number(s.discount), 0),
+      },
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    };
   }
 
   async search(q: string) {
@@ -316,21 +474,60 @@ export class SalesService {
       include: {
         branch: true,
         customer: true,
-        cashier: {
-          select: { userId: true, fullName: true, username: true },
-        },
-        items: {
-          include: {
-            product: {
-              select: { productId: true, productName: true, sku: true, barcode: true },
-            },
-          },
-        },
+        cashier: { select: { userId: true, fullName: true, username: true } },
+        items: { include: { product: true } },
         payments: true,
       },
     });
     if (!sale) throw new NotFoundException('Sale not found');
-    return sale;
+    const totalPaid = sale.payments.reduce(
+      (sum, p) => sum + Number(p.amount),
+      0,
+    );
+    const outstandingAmount = Number(sale.grandTotal) - totalPaid;
+    const paymentStatus = this.computePaymentStatus(
+      Number(sale.grandTotal),
+      totalPaid,
+    );
+    return {
+      sale: {
+        id: sale.saleId,
+        transactionNumber: sale.invoiceNumber,
+        branchId: sale.branchId,
+        posId: sale.posId,
+        sessionId: sale.sessionId,
+        cashierId: sale.userId,
+        customerId: sale.customerId,
+        subtotal: Number(sale.totalAmount),
+        discount: Number(sale.discount),
+        tax: Number(sale.tax),
+        total: Number(sale.grandTotal),
+        amountPaid: totalPaid,
+        outstandingAmount,
+        paymentStatus,
+        saleStatus: sale.status,
+        createdAt: sale.saleDate,
+      },
+      items: sale.items.map((item) => ({
+        productId: item.productId,
+        productName: item.product.productName,
+        sku: item.product.sku,
+        quantity: item.quantity,
+        unitPrice: Number(item.unitPrice),
+        discount: Number(item.discount),
+        tax: Number(item.tax),
+        total: Number(item.totalPrice),
+      })),
+      payments: sale.payments.map((p) => ({
+        id: p.paymentId,
+        reference: p.referenceNumber,
+        method: p.paymentMethod,
+        amount: Number(p.amount),
+        currency: p.currency,
+        status: p.status,
+        paidAt: p.paymentDate,
+      })),
+    };
   }
 
   async refund(id: number, userId: number, dto: RefundSaleDto) {
@@ -340,7 +537,7 @@ export class SalesService {
         include: { items: true },
       });
       if (!sale) throw new NotFoundException('Sale not found');
-      if (sale.status === 'refunded') {
+      if (sale.status === SaleStatus.RETURNED) {
         throw new BadRequestException('Sale already refunded');
       }
 
@@ -402,7 +599,7 @@ export class SalesService {
 
       await tx.sale.update({
         where: { saleId: sale.saleId },
-        data: { status: 'refunded' },
+        data: { status: SaleStatus.RETURNED },
       });
 
       await tx.auditLog.create({

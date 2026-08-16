@@ -70,6 +70,22 @@ enum ExpenseStatus {
   REJECTED
 }
 
+enum SaleStatus {
+  DRAFT
+  PENDING
+  COMPLETED
+  CANCELLED
+  RETURNED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
 // ─── Identity & Access ─────────────────────────────────
 model Role {
   roleId      Int     @id @default(autoincrement()) @map("role_id")
@@ -94,7 +110,7 @@ model User {
   lockedUntil  DateTime?  @map("locked_until")
   createdAt    DateTime   @default(now()) @map("created_at")
   lastLogin    DateTime?  @map("last_login")
-
+  carts              Cart[]                 @relation("CartCashier")
   role   Role   @relation(fields: [roleId], references: [roleId])
   branch Branch @relation(fields: [branchId], references: [branchId])
 
@@ -150,6 +166,7 @@ model Branch {
 
   users                User[]
   inventory            Inventory[]
+  carts              Cart[]
   sales                Sale[]
   expenses             Expense[]
   inventoryMovements   InventoryMovement[]
@@ -217,6 +234,7 @@ model Product {
   brandId        String?  @map("brand_id") @db.VarChar(50)
   unit           String?  @db.VarChar(20)
   wholesalePrice Decimal? @map("wholesale_price") @db.Decimal(10, 2)
+  cartItems          CartItem[]
   taxRate        Decimal? @map("tax_rate") @db.Decimal(5, 2)
   discount       Decimal? @db.Decimal(10, 2)
   image          String?  @db.Text
@@ -279,12 +297,13 @@ model Sale {
   customerId    Int?     @map("customer_id")
   userId        Int      @map("user_id")
   branchId      Int      @map("branch_id")
+  sessionId      String?   @db.VarChar(50) @map("session_id")
   saleDate      DateTime @default(now()) @map("sale_date")
   totalAmount   Decimal  @map("total_amount") @db.Decimal(10, 2)
   discount      Decimal  @default(0) @db.Decimal(10, 2)
   tax           Decimal  @default(0) @db.Decimal(10, 2)
   grandTotal    Decimal  @map("grand_total") @db.Decimal(10, 2)
-  status        String   @default("completed") @db.VarChar(20)
+  status        SaleStatus @default(PENDING)
   posId         String?  @map("pos_id") @db.VarChar(50)
   notes         String?  @db.Text
   createdAt     DateTime @default(now()) @map("created_at")
@@ -319,12 +338,12 @@ model Payment {
   paymentId       Int           @id @default(autoincrement()) @map("payment_id")
   saleId          Int           @map("sale_id")
   paymentMethod   PaymentMethod @map("payment_method")
-  amount          Decimal       @db.Decimal(10, 2)
+  amount          Decimal       @db.Decimal(10,2)
   paymentDate     DateTime      @default(now()) @map("payment_date")
-  referenceNumber String?       @map("reference_number") @db.VarChar(50)
-  status          String        @default("completed") @db.VarChar(20)
-
-  sale Sale @relation(fields: [saleId], references: [saleId], onDelete: Cascade)
+  referenceNumber String?       @db.VarChar(50) @map("reference_number")
+  status          PaymentStatus @default(PAID)
+  currency        String        @default("NGN") @db.VarChar(3)
+  sale            Sale          @relation(fields: [saleId], references: [saleId], onDelete: Cascade)
 
   @@map("PAYMENTS")
 }
@@ -336,6 +355,7 @@ model Customer {
   phone         String?  @db.VarChar(20)
   email         String?  @db.VarChar(100)
   address       String?  @db.Text
+  carts              Cart[]
   loyaltyPoints Int      @default(0) @map("loyalty_points")
   balance       Decimal  @default(0) @db.Decimal(10, 2)
   isActive      Boolean  @default(true) @map("is_active")
@@ -586,4 +606,48 @@ model Notification {
   user User @relation(fields: [userId], references: [userId])
 
   @@map("NOTIFICATIONS")
+}
+
+model Cart {
+  cartId         Int       @id @default(autoincrement()) @map("cart_id")
+  branchId       Int       @map("branch_id")
+  posId          String?   @db.VarChar(50) @map("pos_id")
+  sessionId      String?   @db.VarChar(50) @map("session_id")
+  cashierId      Int       @map("cashier_id")
+  customerId     Int?      @map("customer_id")
+  status         String    @default("ACTIVE") @db.VarChar(20)
+  discountType   String?   @db.VarChar(20) @map("discount_type")
+  discountValue  Decimal?  @db.Decimal(10,2) @map("discount_value")
+  discountReason String?   @db.Text @map("discount_reason")
+  subtotal       Decimal   @default(0) @db.Decimal(10,2)
+  discount       Decimal   @default(0) @db.Decimal(10,2)
+  tax            Decimal   @default(0) @db.Decimal(10,2)
+  total          Decimal   @default(0) @db.Decimal(10,2)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  branch         Branch    @relation(fields: [branchId], references: [branchId])
+  cashier        User      @relation("CartCashier", fields: [cashierId], references: [userId])
+  customer       Customer? @relation(fields: [customerId], references: [customerId])
+  items          CartItem[]
+
+  @@map("CARTS")
+}
+
+model CartItem {
+  cartItemId Int      @id @default(autoincrement()) @map("cart_item_id")
+  cartId     Int      @map("cart_id")
+  productId  Int      @map("product_id")
+  quantity   Int
+  unitPrice  Decimal  @db.Decimal(10,2) @map("unit_price")
+  discount   Decimal  @default(0) @db.Decimal(10,2)
+  tax        Decimal  @default(0) @db.Decimal(10,2)
+  total      Decimal  @db.Decimal(10,2)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  cart       Cart     @relation(fields: [cartId], references: [cartId], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [productId])
+
+  @@unique([cartId, productId])
+  @@map("CART_ITEMS")
 }

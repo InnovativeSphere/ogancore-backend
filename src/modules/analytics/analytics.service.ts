@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, SaleStatus, PaymentStatus } from '@prisma/client';
 
 @Injectable()
 export class AnalyticsService {
@@ -10,7 +10,7 @@ export class AnalyticsService {
   private async getGrossProfit(): Promise<number> {
     const items = await this.prisma.saleItem.findMany({
       include: { product: { select: { costPrice: true } } },
-      where: { sale: { status: { not: 'refunded' } } },
+      where: { sale: { status: { not: SaleStatus.RETURNED } } },
     });
     let grossProfit = 0;
     for (const item of items) {
@@ -24,35 +24,29 @@ export class AnalyticsService {
   async getOverview(branchId?: number) {
     const sales = await this.prisma.sale.findMany({
       where: branchId
-        ? { branchId, status: 'completed' }
-        : { status: 'completed' },
+        ? { branchId, status: SaleStatus.COMPLETED }
+        : { status: SaleStatus.COMPLETED },
     });
     const totalSales = sales.reduce((sum, s) => sum + Number(s.grandTotal), 0);
     const totalTransactions = sales.length;
     const totalDiscount = sales.reduce((sum, s) => sum + Number(s.discount), 0);
     const totalTax = sales.reduce((sum, s) => sum + Number(s.tax), 0);
     const totalReturns = await this.prisma.sale.count({
-      where: { status: 'refunded' },
+      where: { status: SaleStatus.RETURNED },
     });
 
     const totalExpenses = await this.prisma.expense.aggregate({
       _sum: { amount: true },
       where: { isActive: true, ...(branchId ? { branchId } : {}) },
     });
-    const expensesSum = Number(totalExpenses._sum.amount || 0);
+    const expensesSum = Number(totalExpenses._sum?.amount || 0);
 
-    const totalCustomers = await this.prisma.customer.count({
-      where: { isActive: true },
-    });
-    const totalProducts = await this.prisma.product.count({
-      where: { status: 'active' },
-    });
+    const totalCustomers = await this.prisma.customer.count({ where: { isActive: true } });
+    const totalProducts = await this.prisma.product.count({ where: { status: 'active' } });
 
     const inventory = await this.prisma.inventory.findMany({
       include: {
-        product: {
-          select: { costPrice: true, reorderLevel: true, status: true },
-        },
+        product: { select: { costPrice: true, reorderLevel: true, status: true } },
       },
       where: branchId ? { branchId } : {},
     });
@@ -61,18 +55,13 @@ export class AnalyticsService {
       0,
     );
     const lowStockItems = inventory.filter(
-      (inv) =>
-        inv.product.status === 'active' &&
-        inv.quantity <= inv.product.reorderLevel,
+      (inv) => inv.product.status === 'active' && inv.quantity <= inv.product.reorderLevel,
     ).length;
-    const outOfStockItems = inventory.filter(
-      (inv) => inv.quantity === 0,
-    ).length;
+    const outOfStockItems = inventory.filter((inv) => inv.quantity === 0).length;
 
     const grossProfit = await this.getGrossProfit();
     const netProfit = grossProfit - expensesSum;
-    const averageTransactionValue =
-      totalTransactions > 0 ? totalSales / totalTransactions : 0;
+    const averageTransactionValue = totalTransactions > 0 ? totalSales / totalTransactions : 0;
 
     const salesGrowth = 0;
     const profitGrowth = 0;
@@ -123,7 +112,7 @@ export class AnalyticsService {
   }
 
   async getSalesOverview(filters: any) {
-    const where: any = { status: 'completed' };
+    const where: any = { status: SaleStatus.COMPLETED };
     if (filters.branchId) where.branchId = filters.branchId;
     if (filters.cashierId) where.userId = filters.cashierId;
     if (filters.posId) where.posId = filters.posId;
@@ -150,8 +139,7 @@ export class AnalyticsService {
       totalItemsSold += sale.items.reduce((sum, it) => sum + it.quantity, 0);
     }
     const totalTransactions = sales.length;
-    const averageOrderValue =
-      totalTransactions > 0 ? totalSales / totalTransactions : 0;
+    const averageOrderValue = totalTransactions > 0 ? totalSales / totalTransactions : 0;
     const grossProfit = await this.getGrossProfit();
 
     const dailyMap = new Map<
@@ -168,8 +156,7 @@ export class AnalyticsService {
       };
       existing.sales += Number(sale.grandTotal);
       existing.transactions += 1;
-      existing.profit +=
-        Number(sale.grandTotal) * (grossProfit / (totalSales || 1));
+      existing.profit += Number(sale.grandTotal) * (grossProfit / (totalSales || 1));
       dailyMap.set(dateStr, existing);
     }
     const daily = Array.from(dailyMap.values()).sort((a, b) =>
@@ -185,9 +172,7 @@ export class AnalyticsService {
       grossProfit,
       totalDiscount,
       totalTax,
-      totalReturns: await this.prisma.sale.count({
-        where: { status: 'refunded' },
-      }),
+      totalReturns: await this.prisma.sale.count({ where: { status: SaleStatus.RETURNED } }),
       netSales: totalSales,
       daily,
     };
@@ -197,7 +182,7 @@ export class AnalyticsService {
     const items = await this.prisma.saleItem.groupBy({
       by: ['productId'],
       _sum: { quantity: true, totalPrice: true },
-      where: { sale: { status: 'completed' } },
+      where: { sale: { status: SaleStatus.COMPLETED } },
       orderBy: { _sum: { totalPrice: 'desc' } },
       take: limit,
     });
@@ -209,12 +194,11 @@ export class AnalyticsService {
         include: { category: true },
       });
       if (!product) continue;
-      const quantitySold = item._sum.quantity || 0;
-      const totalSales = Number(item._sum.totalPrice || 0);
+      const quantitySold = item._sum?.quantity || 0;
+      const totalSales = Number(item._sum?.totalPrice || 0);
       const costValue = Number(product.costPrice) * quantitySold;
       const grossProfit = totalSales - costValue;
-      const profitMargin =
-        totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
+      const profitMargin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
       result.push({
         productId: product.productId,
         productName: product.productName,
@@ -233,33 +217,30 @@ export class AnalyticsService {
   async getSalesByBranch() {
     const branches = await this.prisma.branch.findMany();
     const result: any[] = [];
-
     for (const branch of branches) {
       const sales = await this.prisma.sale.aggregate({
         _sum: { grandTotal: true },
         _count: { saleId: true },
-        where: { branchId: branch.branchId, status: 'completed' },
+        where: { branchId: branch.branchId, status: SaleStatus.COMPLETED },
       });
-
       const expenses = await this.prisma.expense.aggregate({
         _sum: { amount: true },
         where: { branchId: branch.branchId, isActive: true },
       });
 
-      // Count distinct customers with at least one completed sale in this branch
       const customerGroups = await this.prisma.sale.groupBy({
         by: ['customerId'],
         where: {
           branchId: branch.branchId,
-          status: 'completed',
+          status: SaleStatus.COMPLETED,
           customerId: { not: null },
         },
       });
 
-      const totalSales = Number(sales._sum.grandTotal || 0);
-      const totalTransactions = sales._count.saleId;
-      const grossProfit = await this.getGrossProfit(); // branch-wide could be improved later
-      const totalExpenses = Number(expenses._sum.amount || 0);
+      const totalSales = Number(sales._sum?.grandTotal || 0);
+      const totalTransactions = sales._count?.saleId || 0;
+      const grossProfit = await this.getGrossProfit(); // simplified, branch-wide to be improved
+      const totalExpenses = Number(expenses._sum?.amount || 0);
       const netProfit = grossProfit - totalExpenses;
       const totalCustomers = customerGroups.length;
 
@@ -273,7 +254,6 @@ export class AnalyticsService {
         totalCustomers,
       });
     }
-
     return result;
   }
 
@@ -281,33 +261,26 @@ export class AnalyticsService {
     const where = branchId ? { branchId } : {};
     const totalTransactions = await this.prisma.sale.count({ where });
     const completedTransactions = await this.prisma.sale.count({
-      where: { ...where, status: 'completed' },
+      where: { ...where, status: SaleStatus.COMPLETED },
     });
     const pendingTransactions = await this.prisma.sale.count({
-      where: { ...where, status: 'pending' },
+      where: { ...where, status: SaleStatus.PENDING },
     });
     const cancelledTransactions = await this.prisma.sale.count({
-      where: { ...where, status: 'cancelled' },
+      where: { ...where, status: SaleStatus.CANCELLED },
     });
     const returnedTransactions = await this.prisma.sale.count({
-      where: { ...where, status: 'refunded' },
+      where: { ...where, status: SaleStatus.RETURNED },
     });
 
     const sales = await this.prisma.sale.findMany({
-      where: { ...where, status: 'completed' },
+      where: { ...where, status: SaleStatus.COMPLETED },
       select: { grandTotal: true },
     });
     const totalSales = sales.reduce((sum, s) => sum + Number(s.grandTotal), 0);
-    const averageTransactionValue =
-      sales.length > 0 ? totalSales / sales.length : 0;
-    const largestTransaction =
-      sales.length > 0
-        ? Math.max(...sales.map((s) => Number(s.grandTotal)))
-        : 0;
-    const smallestTransaction =
-      sales.length > 0
-        ? Math.min(...sales.map((s) => Number(s.grandTotal)))
-        : 0;
+    const averageTransactionValue = sales.length > 0 ? totalSales / sales.length : 0;
+    const largestTransaction = sales.length > 0 ? Math.max(...sales.map((s) => Number(s.grandTotal))) : 0;
+    const smallestTransaction = sales.length > 0 ? Math.min(...sales.map((s) => Number(s.grandTotal))) : 0;
 
     return {
       totalTransactions,
@@ -358,8 +331,9 @@ export class AnalyticsService {
           totals.walletAmount += amount;
           break;
       }
-      if (p.status === 'failed') totals.failedPayments += 1;
-      if (p.status === 'refunded') totals.refundedPayments += 1;
+      if (p.status === PaymentStatus.REFUNDED) {
+        totals.refundedPayments += 1;
+      }
       totals.totalPayments += amount;
     }
     return totals;
@@ -370,13 +344,8 @@ export class AnalyticsService {
       include: { product: true },
       where: branchId ? { branchId } : {},
     });
-    const totalProducts = await this.prisma.product.count({
-      where: { status: 'active' },
-    });
-    const totalStockQuantity = inventory.reduce(
-      (sum, inv) => sum + inv.quantity,
-      0,
-    );
+    const totalProducts = await this.prisma.product.count({ where: { status: 'active' } });
+    const totalStockQuantity = inventory.reduce((sum, inv) => sum + inv.quantity, 0);
     const totalInventoryValue = inventory.reduce(
       (sum, inv) => sum + Number(inv.product.costPrice) * inv.quantity,
       0,
@@ -387,13 +356,9 @@ export class AnalyticsService {
       0,
     );
     const lowStockItems = inventory.filter(
-      (inv) =>
-        inv.product.status === 'active' &&
-        inv.quantity <= inv.product.reorderLevel,
+      (inv) => inv.product.status === 'active' && inv.quantity <= inv.product.reorderLevel,
     ).length;
-    const outOfStockItems = inventory.filter(
-      (inv) => inv.quantity === 0,
-    ).length;
+    const outOfStockItems = inventory.filter((inv) => inv.quantity === 0).length;
     const overstockedItems = inventory.filter(
       (inv) => inv.quantity > inv.product.reorderLevel * 3,
     ).length;
@@ -428,25 +393,16 @@ export class AnalyticsService {
     const movements = await this.prisma.inventoryMovement.findMany({
       where: branchId ? { branchId } : {},
     });
-    let totalStockIn = 0,
-      totalStockOut = 0,
-      totalTransfers = 0,
-      totalAdjustments = 0,
-      totalDamaged = 0,
-      totalExpired = 0,
-      totalReturned = 0;
+    let totalStockIn = 0;
+    let totalStockOut = 0;
+    let totalTransfers = 0;
+    let totalAdjustments = 0;
     for (const m of movements) {
-      if (m.movementType === 'RECEIPT')
-        totalStockIn += Math.abs(m.quantityChange);
-      else if (m.movementType === 'SALE')
-        totalStockOut += Math.abs(m.quantityChange);
-      else if (
-        m.movementType === 'TRANSFER_IN' ||
-        m.movementType === 'TRANSFER_OUT'
-      )
+      if (m.movementType === 'RECEIPT') totalStockIn += Math.abs(m.quantityChange);
+      else if (m.movementType === 'SALE') totalStockOut += Math.abs(m.quantityChange);
+      else if (m.movementType === 'TRANSFER_IN' || m.movementType === 'TRANSFER_OUT')
         totalTransfers += Math.abs(m.quantityChange);
-      else if (m.movementType === 'ADJUSTMENT')
-        totalAdjustments += Math.abs(m.quantityChange);
+      else if (m.movementType === 'ADJUSTMENT') totalAdjustments += Math.abs(m.quantityChange);
     }
     return {
       totalStockIn,
@@ -493,10 +449,8 @@ export class AnalyticsService {
     for (const e of expenses) {
       const amount = Number(e.amount);
       totalExpenses += amount;
-
       const categoryName = e.category?.categoryName || 'Other';
       categoryMap.set(categoryName, (categoryMap.get(categoryName) || 0) + amount);
-
       const date = e.expenseDate.toISOString().slice(0, 10);
       dateMap.set(date, (dateMap.get(date) || 0) + amount);
     }
@@ -527,9 +481,7 @@ export class AnalyticsService {
 
   async getCustomers() {
     return {
-      totalCustomers: await this.prisma.customer.count({
-        where: { isActive: true },
-      }),
+      totalCustomers: await this.prisma.customer.count({ where: { isActive: true } }),
       customerGrowth: 0,
     };
   }
@@ -538,7 +490,7 @@ export class AnalyticsService {
     const sales = await this.prisma.sale.groupBy({
       by: ['customerId'],
       _sum: { grandTotal: true },
-      where: { status: 'completed', customerId: { not: null } },
+      where: { status: SaleStatus.COMPLETED, customerId: { not: null } },
       orderBy: { _sum: { grandTotal: 'desc' } },
       take: limit,
     });
@@ -552,7 +504,7 @@ export class AnalyticsService {
         customerId: customer.customerId,
         name: customer.name,
         phone: customer.phone,
-        totalSpent: Number(s._sum.grandTotal || 0),
+        totalSpent: Number(s._sum?.grandTotal || 0),
       });
     }
     return result;
@@ -561,7 +513,7 @@ export class AnalyticsService {
   async getSalesByCategory() {
     const items = await this.prisma.saleItem.findMany({
       include: { product: { include: { category: true } } },
-      where: { sale: { status: 'completed' } },
+      where: { sale: { status: SaleStatus.COMPLETED } },
     });
     const map = new Map<
       number,
@@ -586,12 +538,12 @@ export class AnalyticsService {
       by: [Prisma.SaleScalarFieldEnum.posId],
       _sum: { grandTotal: true },
       _count: { saleId: true },
-      where: { status: 'completed', posId: { not: null } },
+      where: { status: SaleStatus.COMPLETED, posId: { not: null } },
     });
     return rows.map((r) => ({
       posId: r.posId,
-      totalSales: Number(r._sum.grandTotal || 0),
-      totalTransactions: r._count.saleId,
+      totalSales: Number(r._sum?.grandTotal || 0),
+      totalTransactions: r._count?.saleId || 0,
     }));
   }
 
@@ -600,7 +552,7 @@ export class AnalyticsService {
       by: [Prisma.SaleScalarFieldEnum.userId],
       _sum: { grandTotal: true },
       _count: { saleId: true },
-      where: { status: 'completed' },
+      where: { status: SaleStatus.COMPLETED },
     });
     const result: any[] = [];
     for (const r of rows) {
@@ -611,8 +563,8 @@ export class AnalyticsService {
       result.push({
         userId: r.userId,
         fullName: user?.fullName || 'Unknown',
-        totalSales: Number(r._sum.grandTotal || 0),
-        totalTransactions: r._count.saleId,
+        totalSales: Number(r._sum?.grandTotal || 0),
+        totalTransactions: r._count?.saleId || 0,
       });
     }
     return result;

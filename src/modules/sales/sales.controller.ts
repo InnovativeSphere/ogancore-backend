@@ -47,6 +47,10 @@ export class SalesController {
   @ApiQuery({ name: 'posId', required: false, type: String })
   @ApiQuery({ name: 'paymentMethod', required: false, enum: PaymentMethod })
   @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'paymentStatus', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'q', required: false, type: String })
   findAll(
     @Query('branchId') branchId?: string,
     @Query('dateFrom') dateFrom?: string,
@@ -55,6 +59,10 @@ export class SalesController {
     @Query('posId') posId?: string,
     @Query('paymentMethod') paymentMethod?: PaymentMethod,
     @Query('status') status?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('q') q?: string,
   ) {
     return this.salesService.findAll({
       branchId: branchId ? parseInt(branchId, 10) : undefined,
@@ -64,6 +72,10 @@ export class SalesController {
       posId,
       paymentMethod,
       status,
+      paymentStatus,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      search: q,
     });
   }
 

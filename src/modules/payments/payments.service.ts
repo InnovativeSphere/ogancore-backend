@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { PaymentStatus } from '@prisma/client';
 
 @Injectable()
 export class PaymentsService {
@@ -17,15 +18,11 @@ export class PaymentsService {
         include: { payments: true },
       });
       if (!sale) throw new NotFoundException('Sale not found');
-      if (sale.status === 'refunded') {
-        throw new BadRequestException('Cannot pay a refunded sale');
+      if (sale.status === 'RETURNED') {
+        throw new BadRequestException('Cannot pay a returned sale');
       }
 
-      // Calculate current outstanding
-      const totalPaid = sale.payments.reduce(
-        (sum, p) => sum + Number(p.amount),
-        0,
-      );
+      const totalPaid = sale.payments.reduce((sum, p) => sum + Number(p.amount), 0);
       const outstanding = Number(sale.grandTotal) - totalPaid;
 
       if (outstanding <= 0) {
@@ -33,43 +30,54 @@ export class PaymentsService {
       }
 
       if (Number(dto.amount) > outstanding) {
-        throw new BadRequestException(
-          `Amount exceeds outstanding balance (${outstanding})`,
-        );
+        throw new BadRequestException(`Amount exceeds outstanding balance (${outstanding})`);
       }
 
       const payment = await tx.payment.create({
         data: {
           saleId,
-          paymentMethod: dto.paymentMethod,
+          paymentMethod: dto.method,
           amount: Number(dto.amount),
           paymentDate: new Date(),
-          referenceNumber: dto.referenceNumber,
-          status: 'completed',
+          referenceNumber: dto.reference,
+          status: PaymentStatus.PAID,
+          currency: 'NGN',
         },
       });
 
-      // Recalculate and return updated sale with payment status
       const updatedSale = await tx.sale.findUnique({
         where: { saleId },
         include: { payments: true },
       });
 
-      const newTotalPaid = updatedSale!.payments.reduce(
-        (sum, p) => sum + Number(p.amount),
-        0,
-      );
+      const newTotalPaid = updatedSale!.payments.reduce((sum, p) => sum + Number(p.amount), 0);
       const newOutstanding = Number(updatedSale!.grandTotal) - newTotalPaid;
+
+      let saleStatus = updatedSale!.status;
+      let paymentStatus: PaymentStatus = PaymentStatus.PARTIALLY_PAID;
+      if (newOutstanding === 0) {
+        paymentStatus = PaymentStatus.PAID;
+        saleStatus = 'COMPLETED';
+      } else if (newTotalPaid === 0) {
+        paymentStatus = PaymentStatus.UNPAID;
+      }
+
+      await tx.sale.update({
+        where: { saleId },
+        data: { status: saleStatus as any },
+      });
 
       return {
         payment,
-        updatedSale: {
-          saleId: updatedSale!.saleId,
-          grandTotal: updatedSale!.grandTotal,
-          totalPaid: newTotalPaid,
-          outstandingBalance: newOutstanding,
-          paymentStatus:
-            newOutstanding === 0 ? 'PAID' : 'PARTIAL',
+        sale: {
+          id: updatedSale!.saleId,
+          transactionNumber: updatedSale!.invoiceNumber,
+          total: Number(updatedSale!.grandTotal),
+          previousAmountPaid: totalPaid,
+          amountPaid: newTotalPaid,
+          outstandingAmount: newOutstanding,
+          saleStatus: updatedSale!.status,
+          paymentStatus,
         },
       };
     });

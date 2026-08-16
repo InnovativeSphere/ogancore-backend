@@ -92,6 +92,12 @@ export class CreateSaleDto {
   @MaxLength(50)
   posId?: string;
 
+  @ApiPropertyOptional({ description: 'Session ID', example: 'SES-001' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  sessionId?: string;
+
   @ApiPropertyOptional({ description: 'Sale notes', example: 'Walk-in customer' })
   @IsOptional()
   @IsString()

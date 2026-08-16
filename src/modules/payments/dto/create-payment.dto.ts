@@ -6,16 +6,16 @@ import { Type } from 'class-transformer';
 export class CreatePaymentDto {
   @ApiProperty({ enum: PaymentMethod, example: 'BANK_TRANSFER' })
   @IsEnum(PaymentMethod)
-  paymentMethod!: PaymentMethod;
+  method!: PaymentMethod;
 
   @ApiProperty({ description: 'Amount to pay', example: 150 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Type(() => Number)
   amount!: number;
 
-  @ApiPropertyOptional({ description: 'Reference number (transfer reference)', example: 'TRF-445566' })
+  @ApiPropertyOptional({ description: 'Reference number', example: 'TRF-445566' })
   @IsOptional()
   @IsString()
   @MaxLength(50)
-  referenceNumber?: string;
+  reference?: string;
 }
