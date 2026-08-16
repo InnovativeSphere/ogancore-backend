@@ -477,29 +477,51 @@ export class AnalyticsService {
   }
 
   async getExpensesOverview(branchId?: number) {
+    const where: any = { isActive: true };
+    if (branchId) where.branchId = branchId;
+
     const expenses = await this.prisma.expense.findMany({
-      where: { isActive: true, ...(branchId ? { branchId } : {}) },
+      where,
+      include: { category: true },
+      orderBy: { expenseDate: 'asc' },
     });
-    const categories: any = {};
+
     let totalExpenses = 0;
+    const categoryMap = new Map<string, number>();
+    const dateMap = new Map<string, number>();
+
     for (const e of expenses) {
       const amount = Number(e.amount);
       totalExpenses += amount;
-      const cat = e.category || 'other';
-      if (!categories[cat]) categories[cat] = 0;
-      categories[cat] += amount;
+
+      const categoryName = e.category?.categoryName || 'Other';
+      categoryMap.set(categoryName, (categoryMap.get(categoryName) || 0) + amount);
+
+      const date = e.expenseDate.toISOString().slice(0, 10);
+      dateMap.set(date, (dateMap.get(date) || 0) + amount);
     }
+
+    const expenseCount = expenses.length;
+    const averageExpense = expenseCount > 0 ? totalExpenses / expenseCount : 0;
+
+    const expensesByCategory = Array.from(categoryMap.entries()).map(([category, amount]) => ({
+      category,
+      amount,
+      percentage: totalExpenses > 0 ? Number(((amount / totalExpenses) * 100).toFixed(2)) : 0,
+    }));
+
+    const expensesByDate = Array.from(dateMap.entries()).map(([date, amount]) => ({
+      date,
+      amount,
+    }));
+
     return {
+      branchId: branchId || null,
       totalExpenses,
-      operatingExpenses: categories['operating'] || 0,
-      salaryExpenses: categories['salary'] || 0,
-      utilities: categories['utilities'] || 0,
-      rent: categories['rent'] || 0,
-      transportation: categories['transportation'] || 0,
-      maintenance: categories['maintenance'] || 0,
-      otherExpenses: categories['other'] || 0,
-      expenseCount: expenses.length,
-      averageExpense: expenses.length > 0 ? totalExpenses / expenses.length : 0,
+      expenseCount,
+      averageExpense: Number(averageExpense.toFixed(2)),
+      expensesByCategory,
+      expensesByDate,
     };
   }
 

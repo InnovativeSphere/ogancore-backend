@@ -18,6 +18,33 @@ export class SeedService implements OnModuleInit {
       'IT_ADMIN',
     ];
 
+        // Seed expense categories
+    const expenseCategories = [
+      'Rent',
+      'Electricity',
+      'Internet',
+      'Transportation',
+      'Salary',
+      'Maintenance',
+      'Office Supplies',
+      'Marketing',
+      'Security',
+      'Fuel',
+      'Utilities',
+      'Other',
+    ];
+
+    for (const categoryName of expenseCategories) {
+      const existing = await this.prisma.expenseCategory.findFirst({
+        where: { categoryName },
+      });
+      if (!existing) {
+        await this.prisma.expenseCategory.create({
+          data: { categoryName },
+        });
+      }
+    }
+
     for (const roleName of roles) {
       const existingRole = await this.prisma.role.findFirst({
         where: { roleName },
@@ -126,3 +153,4 @@ export class SeedService implements OnModuleInit {
     }
   }
 }
+
