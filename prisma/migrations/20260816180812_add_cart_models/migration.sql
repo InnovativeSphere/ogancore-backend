@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE `sales` ADD COLUMN `session_id` VARCHAR(50) NULL;
+ALTER TABLE `SALES` ADD COLUMN `session_id` VARCHAR(50) NULL;
 
 -- CreateTable
 CREATE TABLE `CARTS` (
