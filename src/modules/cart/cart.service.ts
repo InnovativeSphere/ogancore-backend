@@ -217,7 +217,7 @@ export class CartService {
     return this.getCart(cart.cartId);
   }
 
-  async checkout(cartId: number, userId: number, dto: CheckoutCartDto) {
+   async checkout(cartId: number, userId: number, dto: CheckoutCartDto) {
     const cart = await this.prisma.cart.findUnique({
       where: { cartId },
       include: { items: true },
@@ -234,7 +234,7 @@ export class CartService {
     const amountPaid = Number(dto.payment.amount);
     const paymentMethod = dto.payment.method;
     const customerId = dto.customerId || cart.customerId;
-        if (customerId) {
+    if (customerId) {
       const customer = await this.prisma.customer.findUnique({
         where: { customerId },
       });
@@ -247,6 +247,14 @@ export class CartService {
       throw new BadRequestException('Customer is required for partial payment');
     }
     const change = amountPaid > grandTotal ? amountPaid - grandTotal : 0;
+
+    // Determine payment status
+    const paymentStatus =
+      amountPaid >= grandTotal
+        ? 'PAID'
+        : amountPaid > 0
+          ? 'PARTIALLY_PAID'
+          : 'UNPAID';
 
     // Create sale
     const transactionNumber = `TXN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -264,7 +272,7 @@ export class CartService {
         posId: cart.posId,
         sessionId: cart.sessionId,
         notes: 'Cart checkout',
-status: SaleStatus.COMPLETED,
+        status: SaleStatus.COMPLETED,
       },
     });
 
@@ -325,6 +333,7 @@ status: SaleStatus.COMPLETED,
       total: grandTotal,
       amountPaid,
       change,
+      paymentStatus,
     };
   }
 }

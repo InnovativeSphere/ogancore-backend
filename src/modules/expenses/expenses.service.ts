@@ -7,10 +7,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { ExpenseStatus } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '@prisma/client';
+
 
 @Injectable()
 export class ExpensesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService,private readonly notificationsService: NotificationsService, ) {}
 
   async create(userId: number, dto: CreateExpenseDto) {
     const branch = await this.prisma.branch.findUnique({
@@ -113,11 +116,20 @@ export class ExpensesService {
     if (expense.status === ExpenseStatus.APPROVED) {
       throw new BadRequestException('Expense already approved');
     }
+
+    await this.notificationsService.createForUser(
+  expense.recordedBy,
+  NotificationType.EXPENSE_APPROVED,
+  'Expense approved',
+  `Your expense "${expense.title}" has been approved.`,
+);
+
     return this.prisma.expense.update({
       where: { expenseId: id },
       data: { status: ExpenseStatus.APPROVED, approvedBy: userId },
       include: { category: true, branch: true },
     });
+    
   }
 
   async reject(id: number, userId: number) {
@@ -125,6 +137,14 @@ export class ExpensesService {
     if (expense.status === ExpenseStatus.REJECTED) {
       throw new BadRequestException('Expense already rejected');
     }
+
+    await this.notificationsService.createForUser(
+  expense.recordedBy,
+  NotificationType.EXPENSE_REJECTED,
+  'Expense rejected',
+  `Your expense "${expense.title}" was rejected.`,
+);
+
     return this.prisma.expense.update({
       where: { expenseId: id },
       data: { status: ExpenseStatus.REJECTED, approvedBy: userId },

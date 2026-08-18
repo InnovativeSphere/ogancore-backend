@@ -9,6 +9,7 @@ import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 
 @ApiTags('Customers')
 @Controller('customers')
@@ -16,7 +17,7 @@ export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a customer (any authenticated user)' })
   create(@Body() dto: CreateCustomerDto) {
@@ -24,7 +25,7 @@ export class CustomersController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List customers (active by default)' })
   @ApiQuery({ name: 'includeInactive', required: false, type: Boolean })
@@ -33,7 +34,7 @@ export class CustomersController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a customer by ID' })
   findOne(@Param('id', ParseIntPipe) id: number) {
@@ -41,7 +42,7 @@ export class CustomersController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a customer' })
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateCustomerDto) {
@@ -49,7 +50,7 @@ export class CustomersController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard )
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Deactivate a customer (admin only)' })

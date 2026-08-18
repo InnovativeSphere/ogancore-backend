@@ -9,12 +9,15 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+     private readonly notificationsService: NotificationsService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -70,6 +73,13 @@ export class AuthService {
         createdAt: true,
       },
     });
+
+    await this.notificationsService.createForUser(
+  user.userId,
+  NotificationType.USER_WELCOME,
+  'Welcome to OGANCORE',
+  `Hi ${user.fullName}, your account has been created successfully.`,
+);
 
     return user;
   }

@@ -22,6 +22,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { PaymentMethod } from '@prisma/client';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 
 @ApiTags('Sales')
 @Controller('sales')
@@ -29,7 +30,7 @@ export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a complete sale (cashier/admin)' })
   create(@GetUser('userId') userId: number, @Body() dto: CreateSaleDto) {
@@ -37,7 +38,8 @@ export class SalesController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List sales with multi-parameter filtering' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
@@ -80,16 +82,20 @@ export class SalesController {
   }
 
   @Get('search')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Search sales by transaction number, customer name, or notes' })
+  @ApiOperation({
+    summary: 'Search sales by transaction number, customer name, or notes',
+  })
   @ApiQuery({ name: 'q', required: true, type: String })
   search(@Query('q') q: string) {
     return this.salesService.search(q);
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a single sale with details' })
   findOne(@Param('id', ParseIntPipe) id: number) {
@@ -97,7 +103,7 @@ export class SalesController {
   }
 
   @Post(':id/refund')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Full refund a sale (admin only)' })
@@ -110,7 +116,8 @@ export class SalesController {
   }
 
   @Get(':id/invoice')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get sale invoice data (for printing/receipt)' })
   invoice(@Param('id', ParseIntPipe) id: number) {

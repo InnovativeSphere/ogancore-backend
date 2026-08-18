@@ -11,6 +11,9 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 
 @ApiTags('Payments')
 @Controller('sales')
@@ -18,7 +21,7 @@ export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post(':id/payments')
-  @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add a payment to a sale (credit repayment)' })
   addPayment(
@@ -29,7 +32,8 @@ export class PaymentsController {
   }
 
   @Get(':id/payments')
-  @UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List payments for a sale' })
   listPayments(@Param('id', ParseIntPipe) saleId: number) {

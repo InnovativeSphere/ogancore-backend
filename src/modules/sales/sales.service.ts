@@ -10,17 +10,15 @@ import {
   CreatePaymentEntryDto,
 } from './dto/create-sale.dto';
 import { RefundSaleDto } from './dto/refund-sale.dto';
-import {
-  MovementType,
-  PaymentMethod,
-  SaleStatus,
-  PaymentStatus,
-} from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType, SaleStatus, PaymentStatus, MovementType, PaymentMethod } from '@prisma/client';
 
 @Injectable()
 export class SalesService {
-  constructor(private readonly prisma: PrismaService) {}
-
+constructor(
+  private readonly prisma: PrismaService,
+  private readonly notificationsService: NotificationsService,
+) {}
   private computePaymentStatus(
     grandTotal: number,
     totalPaid: number,
@@ -220,6 +218,13 @@ export class SalesService {
         });
         createdPayments.push(created);
       }
+       await this.notificationsService.createForUser(
+        userId,
+        NotificationType.PAYMENT_RECEIVED,
+        'Payment received',
+        `A payment of ₦${totalPaid} has been recorded for sale ${transactionNumber}.`,
+      );
+      
 
       await tx.auditLog.create({
         data: {

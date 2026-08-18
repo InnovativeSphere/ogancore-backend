@@ -14,13 +14,14 @@ export class ProductsService {
 
   async create(dto: CreateProductDto) {
     // Map frontend "name" to "productName"
-    const data: any = {
+      const data: any = {
       productName: dto.name,
       sku: dto.sku,
       barcode: dto.barcode,
       description: dto.description,
       categoryId: dto.categoryId,
-      brandId: dto.brandId,
+      supplierId: dto.supplierId,
+      branchId: dto.branchId,
       unit: dto.unit,
       costPrice: dto.costPrice,
       sellingPrice: dto.sellingPrice,
@@ -56,9 +57,12 @@ export class ProductsService {
     });
   }
 
-  async findAll(filters?: { branchId?: number; categoryId?: number; search?: string }) {
+   async findAll(filters?: { branchId?: number; categoryId?: number; search?: string }) {
     const where: any = { status: 'active' };
 
+    if (filters?.branchId) {
+      where.branchId = filters.branchId;
+    }
     if (filters?.categoryId) {
       where.categoryId = filters.categoryId;
     }
@@ -70,8 +74,6 @@ export class ProductsService {
       ];
     }
 
-    // If branchId is provided, we might want to filter by inventory? Products are org-wide.
-    // BranchId doesn't directly apply to products. But maybe we ignore it for now.
     return this.prisma.product.findMany({
       where,
       include: { category: true, supplier: true },

@@ -10,14 +10,17 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT')
 @ApiTags('Expenses')
 @Controller('expenses')
 export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Record a new expense' })
   create(@GetUser('userId') userId: number, @Body() dto: CreateExpenseDto) {
@@ -25,7 +28,7 @@ export class ExpensesController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List expenses (optionally filter by branch)' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
@@ -34,7 +37,7 @@ export class ExpensesController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get an expense by ID' })
   findOne(@Param('id', ParseIntPipe) id: number) {
@@ -42,7 +45,7 @@ export class ExpensesController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update an expense (admin only)' })
@@ -55,7 +58,7 @@ export class ExpensesController {
   }
 
   @Patch(':id/approve')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Approve an expense (admin only)' })
@@ -64,7 +67,7 @@ export class ExpensesController {
   }
 
   @Patch(':id/reject')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Reject an expense (admin only)' })
@@ -73,7 +76,7 @@ export class ExpensesController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Soft-delete an expense (admin only)' })

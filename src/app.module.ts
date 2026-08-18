@@ -13,6 +13,12 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { CartModule } from './modules/cart/cart.module';
+import { ProcurementModule } from './modules/procurement/procurement.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { SystemAdminModule } from './modules/system-admin/system-admin.module';
+import { ReportingModule } from './modules/reporting/reporting.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -30,7 +36,14 @@ import { AppController } from './app.controller';
     PaymentsModule,
     ExpensesModule,
     AnalyticsModule,
-    CartModule
+    CartModule,
+    ProcurementModule,
+    SubscriptionsModule,
+    NotificationsModule,
+    AuditModule,
+    SystemAdminModule,
+    ReportingModule
+
     
   ],
   controllers: [AppController],

@@ -21,20 +21,44 @@ export class CategoriesService {
     return this.prisma.category.create({ data: dto });
   }
 
-  async findAll(includeInactive = false) {
+   async findAll(includeInactive = false) {
     const where: any = {};
     if (!includeInactive) {
       where.isActive = true;
     }
-    return this.prisma.category.findMany({ where });
-  }
+    const categories = await this.prisma.category.findMany({
+      where,
+      include: {
+        _count: {
+          select: {
+            products: { where: { status: 'active' } },
+          },
+        },
+      },
+    });
 
-  async findOne(id: number) {
+    return categories.map(({ _count, ...category }) => ({
+      ...category,
+      totalProducts: _count?.products ?? 0,
+    }));
+  }
+   async findOne(id: number) {
     const category = await this.prisma.category.findUnique({
       where: { categoryId: id },
+      include: {
+        _count: {
+          select: {
+            products: { where: { status: 'active' } },
+          },
+        },
+      },
     });
     if (!category) throw new NotFoundException('Category not found');
-    return category;
+    const { _count, ...rest } = category;
+    return {
+      ...rest,
+      totalProducts: _count?.products ?? 0,
+    };
   }
 
   async update(id: number, dto: UpdateCategoryDto) {

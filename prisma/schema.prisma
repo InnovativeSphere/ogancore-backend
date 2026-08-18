@@ -86,6 +86,21 @@ enum PaymentStatus {
   PARTIALLY_REFUNDED
 }
 
+enum NotificationType {
+  LOW_STOCK
+  OUT_OF_STOCK
+  SUBSCRIPTION_EXPIRY
+  SUBSCRIPTION_RENEWAL
+  REPORT_READY
+  PAYMENT_RECEIVED
+  PAYMENT_FAILED
+  EXPENSE_APPROVED
+  EXPENSE_REJECTED
+  SYSTEM_ALERT
+  USER_WELCOME
+  GENERAL
+}
+
 // ─── Identity & Access ─────────────────────────────────
 model Role {
   roleId      Int     @id @default(autoincrement()) @map("role_id")
@@ -166,6 +181,7 @@ model Branch {
 
   users                User[]
   inventory            Inventory[]
+  products        Product[]
   carts              Cart[]
   sales                Sale[]
   expenses             Expense[]
@@ -225,6 +241,7 @@ model Product {
   productName    String   @map("product_name") @db.VarChar(100)
   categoryId     Int      @map("category_id")
   supplierId     Int?     @map("supplier_id")
+  branchId        Int?      @map("branch_id")
   barcode        String?  @db.VarChar(50)
   sku            String?  @db.VarChar(50)
   description    String?  @db.Text
@@ -241,7 +258,9 @@ model Product {
   trackInventory Boolean  @default(true) @map("track_inventory")
   status         String   @default("active") @db.VarChar(20)
   createdAt      DateTime @default(now()) @map("created_at")
-
+  
+  purchaseOrders  PurchaseOrder[]
+  branch          Branch?   @relation(fields: [branchId], references: [branchId])
   category Category  @relation(fields: [categoryId], references: [categoryId])
   supplier Supplier? @relation(fields: [supplierId], references: [supplierId])
 
@@ -416,6 +435,8 @@ model PurchaseRequisition {
 model PurchaseOrder {
   orderId       Int         @id @default(autoincrement()) @map("order_id")
   requisitionId Int?        @map("requisition_id")
+  productId       Int       @map("product_id")
+  quantity        Int
   supplierId    Int         @map("supplier_id")
   branchId      Int         @map("branch_id")
   status        OrderStatus @default(PENDING)
@@ -423,6 +444,7 @@ model PurchaseOrder {
   expectedDate  DateTime?   @map("expected_date")
   notes         String?     @db.Text
 
+  product         Product   @relation(fields: [productId], references: [productId])
   supplier    Supplier             @relation(fields: [supplierId], references: [supplierId])
   branch      Branch               @relation(fields: [branchId], references: [branchId])
   requisition PurchaseRequisition? @relation(fields: [requisitionId], references: [requisitionId])
@@ -449,17 +471,17 @@ model GoodsReceipt {
 
 // ─── Subscriptions ─────────────────────────────────────
 model SubscriptionPlan {
-  planId   Int          @id @default(autoincrement()) @map("plan_id")
-  name     String       @db.VarChar(50)
-  interval PlanInterval
-  price    Decimal      @db.Decimal(10, 2)
-  features String?      @db.Text
+  planId    Int                 @id @default(autoincrement()) @map("plan_id")
+  name      String              @db.VarChar(50)
+  interval  PlanInterval
+  price     Decimal             @db.Decimal(10,2)
+  features  String?             @db.Text
+  isActive  Boolean             @default(true) @map("is_active")
 
   subscriptions TenantSubscription[]
 
   @@map("SUBSCRIPTION_PLANS")
 }
-
 model TenantSubscription {
   subscriptionId Int                @id @default(autoincrement()) @map("subscription_id")
   branchId       Int                @map("branch_id")
@@ -594,16 +616,17 @@ model AuditLog {
 }
 
 model Notification {
-  notificationId Int       @id @default(autoincrement()) @map("notification_id")
-  userId         Int       @map("user_id")
-  type           String    @db.VarChar(50)
-  message        String    @db.Text
-  isRead         Boolean   @default(false) @map("is_read")
-  scheduledFor   DateTime  @map("scheduled_for")
-  sentAt         DateTime? @map("sent_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  notificationId Int              @id @default(autoincrement()) @map("notification_id")
+  userId         Int              @map("user_id")
+  type           NotificationType
+  title          String           @db.VarChar(100)
+  message        String           @db.Text
+  isRead         Boolean          @default(false) @map("is_read")
+  scheduledFor   DateTime         @map("scheduled_for")
+  sentAt         DateTime?        @map("sent_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [userId])
+  user           User             @relation(fields: [userId], references: [userId])
 
   @@map("NOTIFICATIONS")
 }

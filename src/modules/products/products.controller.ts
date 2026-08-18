@@ -17,6 +17,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 
 @ApiTags('Products')
 @Controller('products')
@@ -24,7 +25,7 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a product (admin only)' })
@@ -33,7 +34,7 @@ export class ProductsController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List active products' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
@@ -52,7 +53,7 @@ export class ProductsController {
   }
 
   @Get('search')
-  @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Search products by name, sku, or barcode' })
   @ApiQuery({ name: 'q', required: true, type: String })
@@ -61,7 +62,7 @@ export class ProductsController {
   }
 
   @Get('barcode/:barcode')
-  @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Lookup product by barcode' })
   findByBarcode(@Param('barcode') barcode: string) {
@@ -69,7 +70,7 @@ export class ProductsController {
   }
 
   @Get('sku/:sku')
-  @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Lookup product by SKU' })
   findBySku(@Param('sku') sku: string) {
@@ -77,7 +78,7 @@ export class ProductsController {
   }
 
   @Get('category/:categoryId')
-  @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List products by category' })
   findByCategory(@Param('categoryId', ParseIntPipe) categoryId: number) {
@@ -85,7 +86,7 @@ export class ProductsController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
+ @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get product by ID' })
   findOne(@Param('id', ParseIntPipe) id: number) {
@@ -93,7 +94,7 @@ export class ProductsController {
   }
 
   @Patch(':id/pricing')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update product pricing (admin only)' })
@@ -105,7 +106,7 @@ export class ProductsController {
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update product status (admin only)' })
@@ -117,7 +118,7 @@ export class ProductsController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a product (admin only)' })
@@ -126,7 +127,7 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Deactivate a product (admin only)' })

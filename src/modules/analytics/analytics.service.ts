@@ -199,11 +199,12 @@ export class AnalyticsService {
       const costValue = Number(product.costPrice) * quantitySold;
       const grossProfit = totalSales - costValue;
       const profitMargin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
-      result.push({
+         result.push({
         productId: product.productId,
         productName: product.productName,
         sku: product.sku,
         category: product.category?.categoryName || '',
+        image: product.image,
         quantitySold,
         totalSales,
         grossProfit,
@@ -259,6 +260,7 @@ export class AnalyticsService {
 
   async getTransactions(branchId?: number) {
     const where = branchId ? { branchId } : {};
+
     const totalTransactions = await this.prisma.sale.count({ where });
     const completedTransactions = await this.prisma.sale.count({
       where: { ...where, status: SaleStatus.COMPLETED },
@@ -282,6 +284,22 @@ export class AnalyticsService {
     const largestTransaction = sales.length > 0 ? Math.max(...sales.map((s) => Number(s.grandTotal))) : 0;
     const smallestTransaction = sales.length > 0 ? Math.min(...sales.map((s) => Number(s.grandTotal))) : 0;
 
+    // Get recent transactions
+    const recentTransactions = await this.prisma.sale.findMany({
+      where: { ...where, status: { in: [SaleStatus.COMPLETED, SaleStatus.PENDING] } },
+      orderBy: { saleDate: 'desc' },
+      take: 10,
+      select: {
+        saleId: true,
+        invoiceNumber: true,
+        grandTotal: true,
+        status: true,
+        saleDate: true,
+        customer: { select: { name: true, phone: true } },
+        cashier: { select: { fullName: true } },
+      },
+    });
+
     return {
       totalTransactions,
       completedTransactions,
@@ -291,6 +309,15 @@ export class AnalyticsService {
       averageTransactionValue,
       largestTransaction,
       smallestTransaction,
+      recentTransactions: recentTransactions.map((tx) => ({
+        id: tx.saleId,
+        transactionNumber: tx.invoiceNumber,
+        total: Number(tx.grandTotal),
+        status: tx.status,
+        customer: tx.customer?.name || null,
+        cashier: tx.cashier?.fullName || null,
+        createdAt: tx.saleDate,
+      })),
     };
   }
 

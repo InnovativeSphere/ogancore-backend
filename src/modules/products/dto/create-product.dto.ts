@@ -15,7 +15,7 @@ export class CreateProductDto {
   @IsString()
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
-  name!: string;   // frontend sends "name"; we map to productName in service
+  name!: string;
 
   @ApiPropertyOptional({ description: 'Stock Keeping Unit (internal)', example: 'ABC123' })
   @IsOptional()
@@ -39,11 +39,17 @@ export class CreateProductDto {
   @Type(() => Number)
   categoryId!: number;
 
-  @ApiPropertyOptional({ description: 'Brand ID or name', example: 'brand_01' })
+  @ApiPropertyOptional({ description: 'Supplier ID (optional)', example: 1 })
   @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  brandId?: string;
+  @IsInt()
+  @Type(() => Number)
+  supplierId?: number;
+
+  @ApiPropertyOptional({ description: 'Branch ID (optional)', example: 1 })
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  branchId?: number;
 
   @ApiPropertyOptional({ description: 'Unit of measurement', example: 'Carton' })
   @IsOptional()
@@ -79,7 +85,7 @@ export class CreateProductDto {
   @Type(() => Number)
   discount?: number;
 
-  @ApiPropertyOptional({ description: 'Image URL', example: 'https://example.com/image.jpg' })
+  @ApiPropertyOptional({ description: 'Image URL' })
   @IsOptional()
   @IsString()
   image?: string;
@@ -99,7 +105,7 @@ export class CreateProductDto {
   @IsBoolean()
   trackInventory?: boolean;
 
-  @ApiPropertyOptional({ description: 'Product status', default: 'active', example: 'active' })
+  @ApiPropertyOptional({ description: 'Product status', default: 'active' })
   @IsOptional()
   @IsString()
   status?: string;

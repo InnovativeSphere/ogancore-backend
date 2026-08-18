@@ -5,11 +5,15 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
-import { PaymentStatus } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PaymentStatus, SaleStatus, NotificationType } from '@prisma/client';
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   async addPayment(saleId: number, dto: CreatePaymentDto) {
     return this.prisma.$transaction(async (tx) => {
@@ -18,11 +22,14 @@ export class PaymentsService {
         include: { payments: true },
       });
       if (!sale) throw new NotFoundException('Sale not found');
-      if (sale.status === 'RETURNED') {
+      if (sale.status === SaleStatus.RETURNED) {
         throw new BadRequestException('Cannot pay a returned sale');
       }
 
-      const totalPaid = sale.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const totalPaid = sale.payments.reduce(
+        (sum, p) => sum + Number(p.amount),
+        0,
+      );
       const outstanding = Number(sale.grandTotal) - totalPaid;
 
       if (outstanding <= 0) {
@@ -30,7 +37,9 @@ export class PaymentsService {
       }
 
       if (Number(dto.amount) > outstanding) {
-        throw new BadRequestException(`Amount exceeds outstanding balance (${outstanding})`);
+        throw new BadRequestException(
+          `Amount exceeds outstanding balance (${outstanding})`,
+        );
       }
 
       const payment = await tx.payment.create({
@@ -49,34 +58,47 @@ export class PaymentsService {
         where: { saleId },
         include: { payments: true },
       });
+      if (!updatedSale)
+        throw new NotFoundException('Sale not found after payment');
 
-      const newTotalPaid = updatedSale!.payments.reduce((sum, p) => sum + Number(p.amount), 0);
-      const newOutstanding = Number(updatedSale!.grandTotal) - newTotalPaid;
+      const newTotalPaid = updatedSale.payments.reduce(
+        (sum, p) => sum + Number(p.amount),
+        0,
+      );
+      const newOutstanding = Number(updatedSale.grandTotal) - newTotalPaid;
 
-      let saleStatus = updatedSale!.status;
+      let saleStatus = updatedSale.status;
       let paymentStatus: PaymentStatus = PaymentStatus.PARTIALLY_PAID;
       if (newOutstanding === 0) {
         paymentStatus = PaymentStatus.PAID;
-        saleStatus = 'COMPLETED';
+        saleStatus = SaleStatus.COMPLETED;
       } else if (newTotalPaid === 0) {
         paymentStatus = PaymentStatus.UNPAID;
       }
 
       await tx.sale.update({
         where: { saleId },
-        data: { status: saleStatus as any },
+        data: { status: saleStatus },
       });
+
+      // Notify cashier
+      await this.notificationsService.createForUser(
+        updatedSale.userId,
+        NotificationType.PAYMENT_RECEIVED,
+        'Payment received',
+        `A payment of ₦${dto.amount} has been recorded for transaction ${updatedSale.invoiceNumber}.`,
+      );
 
       return {
         payment,
         sale: {
-          id: updatedSale!.saleId,
-          transactionNumber: updatedSale!.invoiceNumber,
-          total: Number(updatedSale!.grandTotal),
+          id: updatedSale.saleId,
+          transactionNumber: updatedSale.invoiceNumber,
+          total: Number(updatedSale.grandTotal),
           previousAmountPaid: totalPaid,
           amountPaid: newTotalPaid,
           outstandingAmount: newOutstanding,
-          saleStatus: updatedSale!.status,
+          saleStatus: updatedSale.status,
           paymentStatus,
         },
       };

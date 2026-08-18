@@ -5,14 +5,16 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { RequestMethod } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalInterceptors(new TransformInterceptor());
 
   // Global API prefix – e.g., /api/products, /api/sales
-  app.setGlobalPrefix('api');
-
+app.setGlobalPrefix('api', {
+  exclude: [{ path: '', method: RequestMethod.GET }],
+});
   // Enable CORS for frontend access
   app.enableCors();
 
