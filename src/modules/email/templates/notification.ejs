@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      max-width: 600px;
+      margin: 20px auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .header {
+      background-color: <%= accentColor %>;
+      padding: 20px;
+      text-align: center;
+    }
+    .header img {
+      max-height: 40px;
+      width: auto;
+    }
+    .content {
+      padding: 30px;
+      color: #333333;
+    }
+    .content h2 {
+      margin-top: 0;
+      color: <%= accentColor %>;
+    }
+    .content p {
+      line-height: 1.6;
+    }
+    .button {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 24px;
+      background-color: <%= accentColor %>;
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .footer {
+      background-color: #f9fafb;
+      padding: 20px;
+      text-align: center;
+      font-size: 12px;
+      color: #666666;
+    }
+    .social-links a {
+      color: #004D2B;
+      text-decoration: none;
+      margin: 0 8px;
+      font-weight: bold;
+    }
+    .footer p {
+      margin: 6px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="<%= logoUrl %>" alt="OGANCORE Logo" />
+    </div>
+    <div class="content">
+      <h2><%= icon %> <%= title %></h2>
+      <p><%= message %></p>
+      <% if (actionUrl) { %>
+        <a href="<%= actionUrl %>" class="button">View Dashboard</a>
+      <% } %>
+    </div>
+    <div class="footer">
+      <div class="social-links">
+        <a href="https://www.oganstechsolutions.com">Website</a>
+        <a href="https://www.facebook.com/oganstech.solutions">Facebook</a>
+        <a href="https://www.linkedin.com/in/oganstech-solutions-6b1323234">LinkedIn</a>
+      </div>
+      <p>You are receiving this email because you have an account on OGANCORE.</p>
+      <p>&copy; 2026 OGANCORE. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

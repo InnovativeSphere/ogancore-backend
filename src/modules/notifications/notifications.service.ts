@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationType } from '@prisma/client';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   async createForUser(
     userId: number,
@@ -12,7 +16,8 @@ export class NotificationsService {
     title: string,
     message: string,
   ) {
-    return this.prisma.notification.create({
+    // Save to database
+    const notification = await this.prisma.notification.create({
       data: {
         userId,
         type,
@@ -21,6 +26,28 @@ export class NotificationsService {
         scheduledFor: new Date(),
       },
     });
+
+    // Send email to the user (if they have an email)
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { userId },
+        select: { email: true, fullName: true },
+      });
+      if (user?.email) {
+               await this.emailService.sendNotificationEmail(
+          user.email,
+          title,
+          title,
+          message,
+          type,
+        );
+      }
+    } catch (error) {
+      // Email failure shouldn't break the app
+      console.error('Failed to send notification email:', error);
+    }
+
+    return notification;
   }
 
   async createForAdmins(
@@ -32,7 +59,7 @@ export class NotificationsService {
     const admins = await this.prisma.user.findMany({
       where: {
         branchId,
-        status: 'ACTIVE',   // <-- changed from isActive
+        status: 'ACTIVE',
         role: { roleName: { in: ['SUPER_ADMIN', 'ADMIN', 'IT_ADMIN'] } },
       },
       select: { userId: true },
@@ -49,7 +76,7 @@ export class NotificationsService {
     message: string,
   ) {
     const users = await this.prisma.user.findMany({
-      where: { status: 'ACTIVE' },   // <-- changed from isActive
+      where: { status: 'ACTIVE' },
       select: { userId: true },
     });
 

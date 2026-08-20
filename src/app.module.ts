@@ -19,6 +19,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AuditModule } from './modules/audit/audit.module';
 import { SystemAdminModule } from './modules/system-admin/system-admin.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
+import { EmailModule } from './modules/email/email.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -42,7 +43,8 @@ import { AppController } from './app.controller';
     NotificationsModule,
     AuditModule,
     SystemAdminModule,
-    ReportingModule
+    ReportingModule,
+    EmailModule
 
     
   ],
