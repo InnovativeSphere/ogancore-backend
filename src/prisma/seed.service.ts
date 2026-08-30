@@ -16,9 +16,10 @@ export class SeedService implements OnModuleInit {
       'MANAGEMENT',
       'USER',
       'IT_ADMIN',
+      'BUSINESS_ADMIN',
     ];
 
-        // Seed expense categories
+    // Seed expense categories
     const expenseCategories = [
       'Rent',
       'Electricity',
@@ -153,4 +154,3 @@ export class SeedService implements OnModuleInit {
     }
   }
 }
-

@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -12,16 +13,76 @@ import { UpdateProductDto } from './dto/update-product.dto';
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateProductDto) {
-    // Map frontend "name" to "productName"
-      const data: any = {
+  /**
+   * Returns an array of branch IDs the user is allowed to access,
+   * or null if the user has no business scoping (platform roles).
+   */
+  private async getAllowedBranchIds(userId?: number): Promise<number[] | null> {
+    if (!userId) return null;
+
+    const user = await this.prisma.user.findUnique({
+      where: { userId },
+      include: {
+        role: true,
+        branch: { include: { business: true } },
+      },
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+
+    // Only business admins and management are scoped to their business
+    const roleName = user.role?.roleName;
+    if (roleName !== 'BUSINESS_ADMIN' && roleName !== 'MANAGEMENT') {
+      return null; // platform roles see all
+    }
+
+    const businessId = user.branch?.businessId;
+    if (!businessId) {
+      throw new ForbiddenException('Your account is not linked to a business');
+    }
+
+    const branches = await this.prisma.branch.findMany({
+      where: { businessId },
+      select: { branchId: true },
+    });
+
+    return branches.map((b) => b.branchId);
+  }
+
+  /**
+   * Ensure the provided branchId belongs to the user's business,
+   * or set it to the user's own branch if not provided.
+   */
+  private async resolveBranchId(userId: number, branchId?: number): Promise<number | null> {
+    const allowed = await this.getAllowedBranchIds(userId);
+    if (allowed === null) {
+      return branchId ?? null; // platform roles: no restriction
+    }
+
+    if (!branchId) {
+      // Default to user's own branch
+      const user = await this.prisma.user.findUnique({ where: { userId } });
+      return user?.branchId ?? null;
+    }
+
+    if (!allowed.includes(branchId)) {
+      throw new ForbiddenException('You can only manage products in your own business');
+    }
+
+    return branchId;
+  }
+
+  async create(dto: CreateProductDto, userId: number) {
+    const branchId = await this.resolveBranchId(userId, dto.branchId);
+
+    const data: any = {
       productName: dto.name,
       sku: dto.sku,
       barcode: dto.barcode,
       description: dto.description,
       categoryId: dto.categoryId,
       supplierId: dto.supplierId,
-      branchId: dto.branchId,
+      branchId,
       unit: dto.unit,
       costPrice: dto.costPrice,
       sellingPrice: dto.sellingPrice,
@@ -34,16 +95,11 @@ export class ProductsService {
       status: dto.status || 'active',
     };
 
-    // Validate category exists
     const category = await this.prisma.category.findUnique({
       where: { categoryId: dto.categoryId },
     });
     if (!category) throw new BadRequestException('Category not found');
 
-    // Validate supplier if provided (existing supplierId remains optional in schema, but DTO doesn't include it)
-    // We'll keep supplierId nullable; not required by frontend.
-
-    // Barcode uniqueness among active products
     if (dto.barcode) {
       const existing = await this.prisma.product.findFirst({
         where: { barcode: dto.barcode, status: 'active' },
@@ -57,12 +113,16 @@ export class ProductsService {
     });
   }
 
-   async findAll(filters?: { branchId?: number; categoryId?: number; search?: string }) {
+  async findAll(filters: { branchId?: number; categoryId?: number; search?: string }, userId: number) {
+    const allowedBranchIds = await this.getAllowedBranchIds(userId);
     const where: any = { status: 'active' };
 
-    if (filters?.branchId) {
+    if (allowedBranchIds !== null) {
+      where.branchId = { in: allowedBranchIds };
+    } else if (filters?.branchId) {
       where.branchId = filters.branchId;
     }
+
     if (filters?.categoryId) {
       where.categoryId = filters.categoryId;
     }
@@ -80,56 +140,87 @@ export class ProductsService {
     });
   }
 
-  async search(q: string) {
+  async search(q: string, userId: number) {
+    const allowedBranchIds = await this.getAllowedBranchIds(userId);
+    const where: any = {
+      status: 'active',
+      OR: [
+        { productName: { contains: q } },
+        { sku: { contains: q } },
+        { barcode: { contains: q } },
+      ],
+    };
+
+    if (allowedBranchIds !== null) {
+      where.branchId = { in: allowedBranchIds };
+    }
+
     return this.prisma.product.findMany({
-      where: {
-        status: 'active',
-        OR: [
-          { productName: { contains: q } },
-          { sku: { contains: q } },
-          { barcode: { contains: q } },
-        ],
-      },
+      where,
       include: { category: true, supplier: true },
     });
   }
 
-  async findByBarcode(barcode: string) {
+  async findByBarcode(barcode: string, userId: number) {
+    const allowedBranchIds = await this.getAllowedBranchIds(userId);
+    const where: any = { barcode, status: 'active' };
+    if (allowedBranchIds !== null) {
+      where.branchId = { in: allowedBranchIds };
+    }
+
     const product = await this.prisma.product.findFirst({
-      where: { barcode, status: 'active' },
+      where,
       include: { category: true, supplier: true },
     });
     if (!product) throw new NotFoundException('Product not found for this barcode');
     return product;
   }
 
-  async findBySku(sku: string) {
+  async findBySku(sku: string, userId: number) {
+    const allowedBranchIds = await this.getAllowedBranchIds(userId);
+    const where: any = { sku, status: 'active' };
+    if (allowedBranchIds !== null) {
+      where.branchId = { in: allowedBranchIds };
+    }
+
     const product = await this.prisma.product.findFirst({
-      where: { sku, status: 'active' },
+      where,
       include: { category: true, supplier: true },
     });
     if (!product) throw new NotFoundException('Product not found for this SKU');
     return product;
   }
 
-  async findByCategory(categoryId: number) {
+  async findByCategory(categoryId: number, userId: number) {
+    const allowedBranchIds = await this.getAllowedBranchIds(userId);
+    const where: any = { categoryId, status: 'active' };
+    if (allowedBranchIds !== null) {
+      where.branchId = { in: allowedBranchIds };
+    }
+
     return this.prisma.product.findMany({
-      where: { categoryId, status: 'active' },
+      where,
       include: { category: true, supplier: true },
     });
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, userId: number) {
+    const allowedBranchIds = await this.getAllowedBranchIds(userId);
     const product = await this.prisma.product.findUnique({
       where: { productId: id },
       include: { category: true, supplier: true },
     });
     if (!product) throw new NotFoundException('Product not found');
+
+    if (allowedBranchIds !== null && product.branchId !== null && !allowedBranchIds.includes(product.branchId)) {
+      throw new NotFoundException('Product not found');
+    }
+
     return product;
   }
 
-  async update(id: number, dto: UpdateProductDto) {
-    await this.findOne(id); // ensure exists
+  async update(id: number, dto: UpdateProductDto, userId: number) {
+    await this.findOne(id, userId);
 
     const data: any = { ...dto };
     if (dto.name) {
@@ -153,8 +244,8 @@ export class ProductsService {
     });
   }
 
-  async updatePricing(id: number, dto: UpdateProductDto) {
-    await this.findOne(id);
+  async updatePricing(id: number, dto: UpdateProductDto, userId: number) {
+    await this.findOne(id, userId);
     const data: any = {};
     if (dto.costPrice !== undefined) data.costPrice = dto.costPrice;
     if (dto.sellingPrice !== undefined) data.sellingPrice = dto.sellingPrice;
@@ -167,8 +258,8 @@ export class ProductsService {
     });
   }
 
-  async updateStatus(id: number, dto: UpdateProductDto) {
-    await this.findOne(id);
+  async updateStatus(id: number, dto: UpdateProductDto, userId: number) {
+    await this.findOne(id, userId);
     if (!dto.status) throw new BadRequestException('Status is required');
     return this.prisma.product.update({
       where: { productId: id },
@@ -177,8 +268,8 @@ export class ProductsService {
     });
   }
 
-  async remove(id: number) {
-    await this.findOne(id);
+  async remove(id: number, userId: number) {
+    await this.findOne(id, userId);
     return this.prisma.product.update({
       where: { productId: id },
       data: { status: 'inactive' },

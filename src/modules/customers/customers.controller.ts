@@ -8,25 +8,25 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 @ApiTags('Customers')
 @Controller('customers')
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
+@ApiBearerAuth()
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @Post()
- @UseGuards(JwtAuthGuard, SubscriptionGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a customer (any authenticated user)' })
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
+  @ApiOperation({ summary: 'Create a customer' })
   create(@Body() dto: CreateCustomerDto) {
     return this.customersService.create(dto);
   }
 
   @Get()
- @UseGuards(JwtAuthGuard, SubscriptionGuard)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'List customers (active by default)' })
   @ApiQuery({ name: 'includeInactive', required: false, type: Boolean })
   findAll(@Query('includeInactive') includeInactive?: string) {
@@ -34,26 +34,23 @@ export class CustomersController {
   }
 
   @Get(':id')
- @UseGuards(JwtAuthGuard, SubscriptionGuard)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a customer by ID' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.customersService.findOne(id);
   }
 
   @Patch(':id')
- @UseGuards(JwtAuthGuard, SubscriptionGuard)
-  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiOperation({ summary: 'Update a customer' })
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateCustomerDto) {
     return this.customersService.update(id, dto);
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard )
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Deactivate a customer (admin only)' })
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
+  @ApiOperation({ summary: 'Deactivate a customer' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.customersService.remove(id);
   }

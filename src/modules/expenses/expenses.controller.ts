@@ -13,7 +13,7 @@ import { GetUser } from '../../common/decorators/get-user.decorator';
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT')
+@Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT', 'BUSINESS_ADMIN')
 @ApiTags('Expenses')
 @Controller('expenses')
 export class ExpensesController {
@@ -45,8 +45,8 @@ export class ExpensesController {
   }
 
   @Patch(':id')
-@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update an expense (admin only)' })
   update(
@@ -58,8 +58,8 @@ export class ExpensesController {
   }
 
   @Patch(':id/approve')
-@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Approve an expense (admin only)' })
   approve(@Param('id', ParseIntPipe) id: number, @GetUser('userId') userId: number) {
@@ -67,8 +67,8 @@ export class ExpensesController {
   }
 
   @Patch(':id/reject')
-@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Reject an expense (admin only)' })
   reject(@Param('id', ParseIntPipe) id: number, @GetUser('userId') userId: number) {
@@ -76,8 +76,8 @@ export class ExpensesController {
   }
 
   @Delete(':id')
-@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Soft-delete an expense (admin only)' })
   remove(@Param('id', ParseIntPipe) id: number) {

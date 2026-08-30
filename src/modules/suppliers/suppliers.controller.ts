@@ -17,10 +17,10 @@ export class SuppliersController {
   constructor(private readonly suppliersService: SuppliersService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard )
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a supplier (admin only)' })
+  @ApiOperation({ summary: 'Create a supplier' })
   create(@Body() dto: CreateSupplierDto) {
     return this.suppliersService.create(dto);
   }
@@ -43,19 +43,19 @@ export class SuppliersController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard )
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update a supplier (admin only)' })
+  @ApiOperation({ summary: 'Update a supplier' })
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateSupplierDto) {
     return this.suppliersService.update(id, dto);
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard )
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Delete a supplier (soft if in use, hard if empty)' })
+  @ApiOperation({ summary: 'Delete a supplier' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.suppliersService.remove(id);
   }

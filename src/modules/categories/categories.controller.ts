@@ -17,10 +17,10 @@ export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard )
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a category (admin only)' })
+  @ApiOperation({ summary: 'Create a category' })
   create(@Body() dto: CreateCategoryDto) {
     return this.categoriesService.create(dto);
   }
@@ -43,10 +43,10 @@ export class CategoriesController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard )
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update a category (admin only)' })
+  @ApiOperation({ summary: 'Update a category' })
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCategoryDto,
@@ -55,10 +55,10 @@ export class CategoriesController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard )
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Delete a category (soft if in use, hard if empty)' })
+  @ApiOperation({ summary: 'Delete a category' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.categoriesService.remove(id);
   }

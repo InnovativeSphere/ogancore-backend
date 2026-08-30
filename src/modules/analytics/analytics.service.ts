@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma, SaleStatus, PaymentStatus } from '@prisma/client';
 
@@ -611,5 +611,44 @@ export class AnalyticsService {
       netProfit,
       profitMargin: totalSales > 0 ? (netProfit / totalSales) * 100 : 0,
     };
+  }
+
+ async getPlatformBranchCount() {
+    return { totalBranches: await this.prisma.branch.count() };
+  }
+
+  async getPlatformBranchById(branchId: number) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { branchId },
+      include: { business: true },
+    });
+    if (!branch) {
+      throw new NotFoundException('Branch not found');
+    }
+    return branch;
+  }
+
+  async getPlatformProductCount() {
+    return { totalProducts: await this.prisma.product.count({ where: { status: 'active' } }) };
+  }
+
+  async getPlatformProductById(productId: number) {
+    const product = await this.prisma.product.findUnique({
+      where: { productId },
+      include: { branch: { include: { business: true } }, category: true, supplier: true },
+    });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+    return product;
+  }
+
+  async getPlatformUserCount() {
+    // Count only, no personal information
+    return { totalUsers: await this.prisma.user.count() };
+  }
+
+  async getPlatformBusinessCount() {
+    return { totalBusinesses: await this.prisma.business.count() };
   }
 }

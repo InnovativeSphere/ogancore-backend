@@ -5,6 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { KycStatus } from '@prisma/client';
 
 @Injectable()
 export class SubscriptionGuard implements CanActivate {
@@ -18,6 +19,13 @@ export class SubscriptionGuard implements CanActivate {
       throw new ForbiddenException('Subscription required');
     }
 
+    // Platform roles bypass subscription checks
+    const platformRoles = ['SUPER_ADMIN', 'IT_ADMIN'];
+    if (platformRoles.includes(user.role)) {
+      return true;
+    }
+
+    // Check subscription status for tenant roles
     const subscription = await this.prisma.tenantSubscription.findFirst({
       where: {
         branchId: user.branchId,
@@ -29,6 +37,22 @@ export class SubscriptionGuard implements CanActivate {
       throw new ForbiddenException(
         'Your subscription is expired or inactive. Please renew to continue.',
       );
+    }
+
+    // For BUSINESS_ADMIN, also enforce KYC verification
+    if (user.role === 'BUSINESS_ADMIN') {
+      const business = await this.prisma.business.findFirst({
+        where: {
+          branches: { some: { branchId: user.branchId } },
+        },
+        select: { kycStatus: true },
+      });
+
+      if (!business || business.kycStatus !== KycStatus.VERIFIED) {
+        throw new ForbiddenException(
+          'KYC verification is required to access this resource.',
+        );
+      }
     }
 
     return true;

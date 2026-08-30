@@ -33,7 +33,7 @@ export class PaymentsController {
 
   @Get(':id/payments')
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT', "BUSINESS_ADMIN")
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List payments for a sale' })
   listPayments(@Param('id', ParseIntPipe) saleId: number) {

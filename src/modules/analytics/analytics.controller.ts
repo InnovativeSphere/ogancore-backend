@@ -1,4 +1,11 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  Param,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -9,23 +16,29 @@ import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 @ApiTags('Analytics')
 @Controller('analytics')
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-@Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT')
+@Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT', 'BUSINESS_ADMIN')
 @ApiBearerAuth()
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
+
+  // ─── Existing Routes ─────────────────────────────────
 
   @Get('overview')
   @ApiOperation({ summary: 'High-level dashboard stats' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
   overview(@Query('branchId') branchId?: string) {
-    return this.analyticsService.getOverview(branchId ? parseInt(branchId) : undefined);
+    return this.analyticsService.getOverview(
+      branchId ? parseInt(branchId) : undefined,
+    );
   }
 
   @Get('business-snapshot')
   @ApiOperation({ summary: 'Card-level dashboard stats' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
   businessSnapshot(@Query('branchId') branchId?: string) {
-    return this.analyticsService.getBusinessSnapshot(branchId ? parseInt(branchId) : undefined);
+    return this.analyticsService.getBusinessSnapshot(
+      branchId ? parseInt(branchId) : undefined,
+    );
   }
 
   @Get('sales-overview')
@@ -67,42 +80,54 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Transaction status breakdown' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
   transactions(@Query('branchId') branchId?: string) {
-    return this.analyticsService.getTransactions(branchId ? parseInt(branchId) : undefined);
+    return this.analyticsService.getTransactions(
+      branchId ? parseInt(branchId) : undefined,
+    );
   }
 
   @Get('payment-overview')
   @ApiOperation({ summary: 'Payment method breakdown' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
   paymentOverview(@Query('branchId') branchId?: string) {
-    return this.analyticsService.getPaymentOverview(branchId ? parseInt(branchId) : undefined);
+    return this.analyticsService.getPaymentOverview(
+      branchId ? parseInt(branchId) : undefined,
+    );
   }
 
   @Get('inventory-summary')
   @ApiOperation({ summary: 'Stock position' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
   inventorySummary(@Query('branchId') branchId?: string) {
-    return this.analyticsService.getInventorySummary(branchId ? parseInt(branchId) : undefined);
+    return this.analyticsService.getInventorySummary(
+      branchId ? parseInt(branchId) : undefined,
+    );
   }
 
   @Get('inventory-movement')
   @ApiOperation({ summary: 'Movement breakdown' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
   inventoryMovement(@Query('branchId') branchId?: string) {
-    return this.analyticsService.getInventoryMovement(branchId ? parseInt(branchId) : undefined);
+    return this.analyticsService.getInventoryMovement(
+      branchId ? parseInt(branchId) : undefined,
+    );
   }
 
   @Get('low-stock')
   @ApiOperation({ summary: 'Low stock items' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
   lowStock(@Query('branchId') branchId?: string) {
-    return this.analyticsService.getLowStock(branchId ? parseInt(branchId) : undefined);
+    return this.analyticsService.getLowStock(
+      branchId ? parseInt(branchId) : undefined,
+    );
   }
 
   @Get('expenses-overview')
   @ApiOperation({ summary: 'Expense breakdown' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
   expensesOverview(@Query('branchId') branchId?: string) {
-    return this.analyticsService.getExpensesOverview(branchId ? parseInt(branchId) : undefined);
+    return this.analyticsService.getExpensesOverview(
+      branchId ? parseInt(branchId) : undefined,
+    );
   }
 
   @Get('customers')
@@ -139,6 +164,52 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Profit and COGS summary' })
   @ApiQuery({ name: 'branchId', required: false, type: Number })
   profit(@Query('branchId') branchId?: string) {
-    return this.analyticsService.getProfit(branchId ? parseInt(branchId) : undefined);
+    return this.analyticsService.getProfit(
+      branchId ? parseInt(branchId) : undefined,
+    );
+  }
+
+  // ─── Platform Oversight Routes (Superadmin / IT Admin only) ───
+
+  @Get('platform/branches/count')
+  @Roles('SUPER_ADMIN', 'IT_ADMIN')
+  @ApiOperation({ summary: 'Get total number of branches (platform)' })
+  platformBranchCount() {
+    return this.analyticsService.getPlatformBranchCount();
+  }
+
+  @Get('platform/branches/:id')
+  @Roles('SUPER_ADMIN', 'IT_ADMIN')
+  @ApiOperation({ summary: 'Get branch details by ID (platform)' })
+  platformBranchById(@Param('id', ParseIntPipe) id: number) {
+    return this.analyticsService.getPlatformBranchById(id);
+  }
+
+  @Get('platform/products/count')
+  @Roles('SUPER_ADMIN', 'IT_ADMIN')
+  @ApiOperation({ summary: 'Get total number of products (platform)' })
+  platformProductCount() {
+    return this.analyticsService.getPlatformProductCount();
+  }
+
+  @Get('platform/products/:id')
+  @Roles('SUPER_ADMIN', 'IT_ADMIN')
+  @ApiOperation({ summary: 'Get product details by ID (platform)' })
+  platformProductById(@Param('id', ParseIntPipe) id: number) {
+    return this.analyticsService.getPlatformProductById(id);
+  }
+
+  @Get('platform/users/count')
+  @Roles('SUPER_ADMIN', 'IT_ADMIN')
+  @ApiOperation({ summary: 'Get total number of users (platform)' })
+  platformUserCount() {
+    return this.analyticsService.getPlatformUserCount();
+  }
+
+  @Get('platform/businesses/count')
+  @Roles('SUPER_ADMIN', 'IT_ADMIN')
+  @ApiOperation({ summary: 'Get total number of businesses (platform)' })
+  platformBusinessCount() {
+    return this.analyticsService.getPlatformBusinessCount();
   }
 }

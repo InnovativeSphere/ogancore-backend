@@ -20,6 +20,8 @@ import { AuditModule } from './modules/audit/audit.module';
 import { SystemAdminModule } from './modules/system-admin/system-admin.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
 import { EmailModule } from './modules/email/email.module';
+import { KycModule } from './modules/kyc/kyc.module';
+import { BusinessModule } from './modules/business/business.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -44,7 +46,9 @@ import { AppController } from './app.controller';
     AuditModule,
     SystemAdminModule,
     ReportingModule,
-    EmailModule
+    EmailModule,
+    BusinessModule,
+    KycModule
 
     
   ],

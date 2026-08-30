@@ -19,7 +19,6 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 
-
 @ApiTags('Inventory')
 @Controller('inventory')
 export class InventoryController {
@@ -27,7 +26,7 @@ export class InventoryController {
 
   @Get(':branchId')
   @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'View stock levels for a branch' })
   viewBranchInventory(@Param('branchId', ParseIntPipe) branchId: number) {
@@ -36,7 +35,7 @@ export class InventoryController {
 
   @Post('stock-in')
   @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Receive stock (admin only)' })
   stockIn(@GetUser('userId') userId: number, @Body() dto: StockInDto) {
@@ -45,7 +44,7 @@ export class InventoryController {
 
   @Post('stock-out')
   @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Remove stock without a sale (admin only)' })
   stockOut(@GetUser('userId') userId: number, @Body() dto: StockOutDto) {
@@ -54,7 +53,7 @@ export class InventoryController {
 
   @Post('transfer')
   @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Transfer stock between branches (admin only)' })
   transfer(@GetUser('userId') userId: number, @Body() dto: TransferDto) {
@@ -63,7 +62,7 @@ export class InventoryController {
 
   @Post('adjust')
   @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Manually adjust stock (admin only)' })
   adjust(@GetUser('userId') userId: number, @Body() dto: AdjustDto) {
@@ -72,7 +71,7 @@ export class InventoryController {
 
   @Get(':branchId/:productId/movements')
   @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'MANAGEMENT', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'View movement history for a product at a branch' })
   getMovements(

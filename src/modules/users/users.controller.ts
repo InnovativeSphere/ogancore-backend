@@ -71,11 +71,11 @@ export class UsersController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN') // added BUSINESS_ADMIN
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a user (admin only)' })
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.create(dto);
+  @ApiOperation({ summary: 'Create a user (admin or business admin)' })
+  create(@Body() dto: CreateUserDto, @GetUser('userId') creatorUserId: number) {
+    return this.usersService.create(dto, creatorUserId);
   }
 
   @Patch(':id')
