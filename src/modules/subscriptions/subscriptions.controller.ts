@@ -35,6 +35,7 @@ export class SubscriptionsController {
   }
 
   @Get('plans')
+  @UseGuards()
   @ApiOperation({ summary: 'List subscription plans (public)' })
   listPlans() {
     return this.subscriptionsService.listPlans();
