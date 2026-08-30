@@ -1,3 +1,7 @@
+-- Remove old test subscriptions and their invoices (safe; frontend data in other tables)
+DELETE FROM `SUBSCRIPTION_INVOICES`;
+DELETE FROM `TENANT_SUBSCRIPTIONS`;
+
 -- DropForeignKey
 ALTER TABLE `TENANT_SUBSCRIPTIONS` DROP FOREIGN KEY `TENANT_SUBSCRIPTIONS_branch_id_fkey`;
 
