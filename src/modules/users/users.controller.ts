@@ -80,14 +80,15 @@ export class UsersController {
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update any user (admin only)' })
+  @ApiOperation({ summary: 'Update a user (admin or business admin)' })
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserDto,
+    @GetUser('userId') userId: number,
   ) {
-    return this.usersService.update(id, dto);
+    return this.usersService.update(id, dto, userId);
   }
 
   @Delete(':id')

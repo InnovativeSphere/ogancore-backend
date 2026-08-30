@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min, IsInt } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { PlanInterval } from '@prisma/client';
@@ -23,4 +23,18 @@ export class CreatePlanDto {
   @IsOptional()
   @IsString()
   features?: string;
+
+  @ApiPropertyOptional({ description: 'Maximum number of branches allowed', example: 5 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  maxBranches?: number;
+
+  @ApiPropertyOptional({ description: 'Maximum number of users allowed', example: 10 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  maxUsers?: number;
 }

@@ -75,6 +75,26 @@ export class BranchesService {
   async create(dto: CreateBranchDto, userId: number) {
     const businessId = await this.getBusinessIdForBusinessAdmin(userId);
 
+    // Plan maxBranches limit enforcement
+    const subscription = await this.prisma.tenantSubscription.findFirst({
+      where: {
+        businessId,
+        status: { in: ['TRIAL', 'ACTIVE', 'GRACE'] },
+      },
+      include: { plan: true },
+    });
+
+    if (subscription?.plan?.maxBranches != null) {
+      const branchCount = await this.prisma.branch.count({
+        where: { businessId },
+      });
+      if (branchCount >= subscription.plan.maxBranches) {
+        throw new ForbiddenException(
+          `Your current plan allows a maximum of ${subscription.plan.maxBranches} branch(es).`,
+        );
+      }
+    }
+
     const existing = await this.prisma.branch.findFirst({
       where: { branchName: dto.branchName, isActive: true, businessId },
     });

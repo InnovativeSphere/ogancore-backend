@@ -15,7 +15,6 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // ─── Public profile (authenticated user) ────────────
   async findProfile(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { userId },
@@ -25,7 +24,6 @@ export class UsersService {
     return this.excludePassword(user);
   }
 
-  // ─── Update own profile ─────────────────────────────
   async updateProfile(userId: number, dto: UpdateUserDto) {
     const { roleId, branchId, status, ...safeDto } = dto as any;
     const user = await this.prisma.user.update({
@@ -36,7 +34,6 @@ export class UsersService {
     return this.excludePassword(user);
   }
 
-  // ─── Change own password ─────────────────────────────
   async changePassword(userId: number, dto: ChangePasswordDto) {
     const user = await this.prisma.user.findUnique({ where: { userId } });
     if (!user) throw new NotFoundException('User not found');
@@ -52,7 +49,6 @@ export class UsersService {
     return { message: 'Password changed successfully' };
   }
 
-  // ─── Admin: list all users ───────────────────────────
   async findAll() {
     const users = await this.prisma.user.findMany({
       include: { role: true, branch: true },
@@ -60,41 +56,34 @@ export class UsersService {
     return users.map((u) => this.excludePassword(u));
   }
 
-  // ─── Admin: create user (full control, with business scoping) ───────────────
   async create(dto: CreateUserDto, creatorUserId: number) {
-    // 1. Verify branch exists
     const branch = await this.prisma.branch.findUnique({
       where: { branchId: dto.branchId },
     });
     if (!branch) throw new BadRequestException('Branch not found');
 
-    // 2. Check uniqueness
     const existingEmail = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existingEmail) throw new ConflictException('Email already registered');
 
     const existingUsername = await this.prisma.user.findUnique({ where: { username: dto.username } });
     if (existingUsername) throw new ConflictException('Username already taken');
 
-    // 3. Get creator details
     const creator = await this.prisma.user.findUnique({
       where: { userId: creatorUserId },
       include: { role: true, branch: { include: { business: true } } },
     });
     if (!creator) throw new NotFoundException('Creator not found');
 
-    // 4. If creator is BUSINESS_ADMIN, enforce business scoping and role restrictions
     if (creator.role.roleName === 'BUSINESS_ADMIN') {
       const creatorBusinessId = creator.branch?.businessId;
       if (!creatorBusinessId) {
         throw new ForbiddenException('Your account is not linked to a business');
       }
 
-      // Branch must belong to creator's business
       if (branch.businessId !== creatorBusinessId) {
         throw new ForbiddenException('You can only create users in branches of your own business');
       }
 
-      // Role restriction: BUSINESS_ADMIN can only assign business-scoped roles
       const targetRole = await this.prisma.role.findUnique({ where: { roleId: dto.roleId } });
       if (!targetRole) throw new BadRequestException('Role not found');
 
@@ -104,9 +93,34 @@ export class UsersService {
           'You can only assign business-scoped roles: USER, LOAN_OFFICER, CREDIT_REVIEWER, or MANAGEMENT.',
         );
       }
+
+      // Plan maxUsers limit
+      const subscription = await this.prisma.tenantSubscription.findFirst({
+        where: {
+          businessId: creatorBusinessId,
+          status: { in: ['TRIAL', 'ACTIVE', 'GRACE'] },
+        },
+        include: { plan: true },
+      });
+
+      if (subscription?.plan?.maxUsers != null) {
+        const branches = await this.prisma.branch.findMany({
+          where: { businessId: creatorBusinessId },
+          select: { branchId: true },
+        });
+        const branchIds = branches.map((b) => b.branchId);
+
+        const userCount = await this.prisma.user.count({
+          where: { branchId: { in: branchIds } },
+        });
+
+        if (userCount >= subscription.plan.maxUsers) {
+          throw new ForbiddenException(
+            `Your current plan allows a maximum of ${subscription.plan.maxUsers} user(s).`,
+          );
+        }
+      }
     } else {
-      // Non-business admin (ADMIN, SUPER_ADMIN, IT_ADMIN) can create users in any branch
-      // No additional checks needed, but we could optionally restrict to active branches
       if (!branch.isActive) throw new BadRequestException('Branch is inactive');
     }
 
@@ -127,11 +141,82 @@ export class UsersService {
     return this.excludePassword(user);
   }
 
-  // ─── Admin: update any user ──────────────────────────
-  async update(userId: number, dto: UpdateUserDto) {
-    const user = await this.prisma.user.findUnique({ where: { userId } });
-    if (!user) throw new NotFoundException('User not found');
+  async update(userId: number, dto: UpdateUserDto, requesterUserId: number) {
+    const requester = await this.prisma.user.findUnique({
+      where: { userId: requesterUserId },
+      include: { role: true, branch: { include: { business: true } } },
+    });
+    if (!requester) throw new NotFoundException('Requester not found');
 
+    const target = await this.prisma.user.findUnique({
+      where: { userId },
+      include: { branch: true },
+    });
+    if (!target) throw new NotFoundException('User not found');
+
+    // If requester is BUSINESS_ADMIN, enforce restrictions
+    if (requester.role.roleName === 'BUSINESS_ADMIN') {
+      const requesterBusinessId = requester.branch?.businessId;
+      if (!requesterBusinessId) {
+        throw new ForbiddenException('Your account is not linked to a business');
+      }
+
+      // Target must belong to same business
+      const targetBranch = await this.prisma.branch.findUnique({
+        where: { branchId: target.branchId },
+        select: { businessId: true },
+      });
+      if (!targetBranch || targetBranch.businessId !== requesterBusinessId) {
+        throw new ForbiddenException('You can only update users in your own business');
+      }
+
+      // Build allowed updates
+      const allowedUpdates: any = {};
+
+      // Always allow these fields if provided
+      if (dto.fullName !== undefined) allowedUpdates.fullName = dto.fullName;
+      if (dto.username !== undefined) allowedUpdates.username = dto.username;
+      if (dto.phone !== undefined) allowedUpdates.phone = dto.phone;
+      if (dto.status !== undefined) allowedUpdates.status = dto.status;
+
+      // Role change: only allow business-scoped roles (not SUPER_ADMIN, IT_ADMIN, ADMIN, BUSINESS_ADMIN)
+      if (dto.roleId !== undefined) {
+        const targetRole = await this.prisma.role.findUnique({ where: { roleId: dto.roleId } });
+        if (!targetRole) throw new BadRequestException('Role not found');
+        const allowedRoles = ['USER', 'LOAN_OFFICER', 'CREDIT_REVIEWER', 'MANAGEMENT'];
+        if (!allowedRoles.includes(targetRole.roleName)) {
+          throw new ForbiddenException('Business admin can only assign business-scoped roles');
+        }
+        allowedUpdates.roleId = dto.roleId;
+      }
+
+      // Branch change: ensure new branch belongs to same business
+      if (dto.branchId !== undefined) {
+        const newBranch = await this.prisma.branch.findUnique({ where: { branchId: dto.branchId } });
+        if (!newBranch) throw new BadRequestException('Branch not found');
+        if (newBranch.businessId !== requesterBusinessId) {
+          throw new ForbiddenException('Can only assign users to branches in your own business');
+        }
+        allowedUpdates.branchId = dto.branchId;
+      }
+
+      // Check username/email uniqueness if changed (email not allowed, but username could be changed)
+      if (allowedUpdates.username) {
+        const existing = await this.prisma.user.findFirst({
+          where: { username: allowedUpdates.username, userId: { not: userId } },
+        });
+        if (existing) throw new ConflictException('Username already taken');
+      }
+
+      const updated = await this.prisma.user.update({
+        where: { userId },
+        data: allowedUpdates,
+        include: { role: true, branch: true },
+      });
+      return this.excludePassword(updated);
+    }
+
+    // For platform admins, full update as before
     const updated = await this.prisma.user.update({
       where: { userId },
       data: dto,
@@ -140,7 +225,6 @@ export class UsersService {
     return this.excludePassword(updated);
   }
 
-  // ─── Admin: soft‑delete (deactivate) ────────────────
   async remove(userId: number) {
     const user = await this.prisma.user.findUnique({ where: { userId } });
     if (!user) throw new NotFoundException('User not found');
@@ -152,7 +236,6 @@ export class UsersService {
     return { message: 'User deactivated' };
   }
 
-  // ─── Helper: strip password hash from output ─────────
   private excludePassword(user: any) {
     const { passwordHash, ...rest } = user;
     return rest;

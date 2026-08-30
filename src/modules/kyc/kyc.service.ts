@@ -12,13 +12,17 @@ export class KycService {
 
   async verifyNin(nin: string) {
     const url = `${this.baseUrl}${process.env.IDENTRO_NIN_VERIFY_URL || '/merchant-api/nin/verify'}`;
-    return this.postJson(url, {
+    console.log('NIN verify URL:', url);
+    console.log('NIN verify body:', { nin });
+    const result = await this.postJson(url, {
       nin,
       forceRefresh: false,
       consentCaptured: true,
       consentReference: 'OGANCORE-REGISTRATION',
       idempotencyKey: `OGANCORE-NIN-${Date.now()}`,
     });
+    console.log('NIN verify response:', JSON.stringify(result));
+    return result;
   }
 
   async verifyCac(registrationNumber: string) {
@@ -41,7 +45,7 @@ export class KycService {
       },
       body: JSON.stringify(body),
     });
-
+    console.log('Response status:', response.status);
     const data = await response.json();
     return data;
   }

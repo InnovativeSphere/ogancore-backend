@@ -3,10 +3,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class AssignSubscriptionDto {
-  @ApiProperty({ description: 'Branch ID', example: 1 })
+  @ApiProperty({ description: 'Business ID', example: 1 })
   @IsInt()
   @Type(() => Number)
-  branchId!: number;
+  businessId!: number;
 
   @ApiProperty({ description: 'Plan ID', example: 1 })
   @IsInt()

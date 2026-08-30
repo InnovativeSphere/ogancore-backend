@@ -25,10 +25,22 @@ export class SubscriptionGuard implements CanActivate {
       return true;
     }
 
-    // Check subscription status for tenant roles
+    // Derive businessId from user's branch
+    const branch = await this.prisma.branch.findUnique({
+      where: { branchId: user.branchId },
+      select: { businessId: true },
+    });
+
+    if (!branch?.businessId) {
+      throw new ForbiddenException('Your account is not linked to a business');
+    }
+
+    const businessId = branch.businessId;
+
+    // Check subscription status for the business
     const subscription = await this.prisma.tenantSubscription.findFirst({
       where: {
-        branchId: user.branchId,
+        businessId,
         status: { in: ['TRIAL', 'ACTIVE', 'GRACE'] },
       },
     });
@@ -41,10 +53,8 @@ export class SubscriptionGuard implements CanActivate {
 
     // For BUSINESS_ADMIN, also enforce KYC verification
     if (user.role === 'BUSINESS_ADMIN') {
-      const business = await this.prisma.business.findFirst({
-        where: {
-          branches: { some: { branchId: user.branchId } },
-        },
+      const business = await this.prisma.business.findUnique({
+        where: { businessId },
         select: { kycStatus: true },
       });
 

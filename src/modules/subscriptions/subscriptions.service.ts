@@ -14,7 +14,10 @@ import { NotificationType } from '@prisma/client';
 
 @Injectable()
 export class SubscriptionsService {
-  constructor(private readonly prisma: PrismaService,  private readonly notificationsService: NotificationsService,) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   // ─── PLANS ─────────────────────────────────────────
   async createPlan(dto: CreatePlanDto) {
@@ -55,26 +58,36 @@ export class SubscriptionsService {
 
   // ─── SUBSCRIPTIONS ────────────────────────────────
   async assignSubscription(dto: AssignSubscriptionDto) {
-    const branch = await this.prisma.branch.findUnique({ where: { branchId: dto.branchId } });
-    if (!branch) throw new BadRequestException('Branch not found');
+    const business = await this.prisma.business.findUnique({
+      where: { businessId: dto.businessId },
+    });
+    if (!business) throw new BadRequestException('Business not found');
 
-    const plan = await this.prisma.subscriptionPlan.findUnique({ where: { planId: dto.planId } });
+    const plan = await this.prisma.subscriptionPlan.findUnique({
+      where: { planId: dto.planId },
+    });
     if (!plan) throw new BadRequestException('Plan not found');
 
-    // Check if there is already an active subscription for this branch
+    // Check if there is already an active subscription for this business
     const existing = await this.prisma.tenantSubscription.findFirst({
       where: {
-        branchId: dto.branchId,
-        status: { in: [SubscriptionStatus.TRIAL, SubscriptionStatus.ACTIVE, SubscriptionStatus.GRACE] },
+        businessId: dto.businessId,
+        status: {
+          in: [
+            SubscriptionStatus.TRIAL,
+            SubscriptionStatus.ACTIVE,
+            SubscriptionStatus.GRACE,
+          ],
+        },
       },
     });
     if (existing) {
-      throw new BadRequestException('Branch already has an active subscription');
+      throw new BadRequestException('Business already has an active subscription');
     }
 
     const subscription = await this.prisma.tenantSubscription.create({
       data: {
-        branchId: dto.branchId,
+        businessId: dto.businessId,
         planId: dto.planId,
         startDate: new Date(dto.startDate),
         endDate: new Date(dto.endDate),
@@ -99,22 +112,28 @@ export class SubscriptionsService {
   async getSubscription(id: number) {
     const sub = await this.prisma.tenantSubscription.findUnique({
       where: { subscriptionId: id },
-      include: { plan: true, branch: true, invoices: true },
+      include: { plan: true, business: true, invoices: true },
     });
     if (!sub) throw new NotFoundException('Subscription not found');
     return sub;
   }
 
-  async getBranchSubscription(branchId: number) {
+  async getBusinessSubscription(businessId: number) {
     const sub = await this.prisma.tenantSubscription.findFirst({
       where: {
-        branchId,
-        status: { in: [SubscriptionStatus.TRIAL, SubscriptionStatus.ACTIVE, SubscriptionStatus.GRACE] },
+        businessId,
+        status: {
+          in: [
+            SubscriptionStatus.TRIAL,
+            SubscriptionStatus.ACTIVE,
+            SubscriptionStatus.GRACE,
+          ],
+        },
       },
       include: { plan: true, invoices: true },
       orderBy: { startDate: 'desc' },
     });
-    if (!sub) throw new NotFoundException('No active subscription for this branch');
+    if (!sub) throw new NotFoundException('No active subscription for this business');
     return sub;
   }
 
@@ -142,12 +161,19 @@ export class SubscriptionsService {
       },
     });
 
-    await this.notificationsService.createForAdmins(
-  sub.branchId,
-  NotificationType.SUBSCRIPTION_RENEWAL,
-  'Subscription renewed',
-  `Subscription for branch has been renewed until ${dto.endDate}.`,
-);
+    // Notify admins: use the first branch of the business as fallback
+    const firstBranch = await this.prisma.branch.findFirst({
+      where: { businessId: sub.businessId },
+      orderBy: { branchId: 'asc' },
+    });
+    if (firstBranch) {
+      await this.notificationsService.createForAdmins(
+        firstBranch.branchId,
+        NotificationType.SUBSCRIPTION_RENEWAL,
+        'Subscription renewed',
+        `Subscription for business has been renewed until ${dto.endDate}.`,
+      );
+    }
 
     return this.getSubscription(id);
   }

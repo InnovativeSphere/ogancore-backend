@@ -1,10 +1,11 @@
 import {
-  IsString,
   IsEmail,
-  IsOptional,
   IsEnum,
-  MinLength,
+  IsInt,
+  IsOptional,
+  IsString,
   MaxLength,
+  MinLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BusinessType } from '@prisma/client';
@@ -12,7 +13,6 @@ import { BusinessType } from '@prisma/client';
 export class RegisterBusinessDto {
   @ApiProperty({ description: 'Business name', example: 'Dale Enterprises' })
   @IsString()
-  @MinLength(2)
   @MaxLength(150)
   businessName!: string;
 
@@ -28,7 +28,6 @@ export class RegisterBusinessDto {
   @ApiPropertyOptional({ description: 'Business phone' })
   @IsOptional()
   @IsString()
-  @MaxLength(20)
   businessPhone?: string;
 
   @ApiPropertyOptional({ description: 'Business address' })
@@ -44,19 +43,15 @@ export class RegisterBusinessDto {
   @ApiPropertyOptional({ description: 'CAC registration number' })
   @IsOptional()
   @IsString()
-  @MaxLength(50)
   cacRegistrationNumber?: string;
 
   @ApiPropertyOptional({ description: 'National Identification Number (NIN)' })
   @IsOptional()
   @IsString()
-  @MaxLength(20)
   nin?: string;
 
   @ApiProperty({ description: 'Owner full name' })
   @IsString()
-  @MinLength(2)
-  @MaxLength(100)
   ownerFullName!: string;
 
   @ApiProperty({ description: 'Owner email (also used for login)' })
@@ -66,23 +61,25 @@ export class RegisterBusinessDto {
   @ApiProperty({ description: 'Owner password', example: 'Str0ngP@ss' })
   @IsString()
   @MinLength(8)
-  @MaxLength(128)
   ownerPassword!: string;
 
   @ApiPropertyOptional({ description: 'Owner phone' })
   @IsOptional()
   @IsString()
-  @MaxLength(20)
   ownerPhone?: string;
 
   @ApiPropertyOptional({ description: 'Default branch name', example: 'Main Branch' })
   @IsOptional()
   @IsString()
-  @MaxLength(100)
   branchName?: string;
 
   @ApiPropertyOptional({ description: 'Branch address' })
   @IsOptional()
   @IsString()
   branchAddress?: string;
+
+  @ApiPropertyOptional({ description: 'Plan ID to subscribe to during onboarding' })
+  @IsOptional()
+  @IsInt()
+  planId?: number;
 }

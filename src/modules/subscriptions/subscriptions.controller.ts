@@ -21,14 +21,13 @@ import { Roles } from '../../common/decorators/roles.decorator';
 
 @ApiTags('Subscriptions')
 @Controller('subscriptions')
-@UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class SubscriptionsController {
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
 
-  // Plans
+  // ─── PLANS ─────────────────────────────────────────
   @Post('plans')
-  @UseGuards(RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiOperation({ summary: 'Create a subscription plan (admin only)' })
   createPlan(@Body() dto: CreatePlanDto) {
@@ -36,19 +35,20 @@ export class SubscriptionsController {
   }
 
   @Get('plans')
-  @ApiOperation({ summary: 'List subscription plans' })
+  @ApiOperation({ summary: 'List subscription plans (public)' })
   listPlans() {
     return this.subscriptionsService.listPlans();
   }
 
   @Get('plans/:id')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get a subscription plan' })
   getPlan(@Param('id', ParseIntPipe) id: number) {
     return this.subscriptionsService.getPlan(id);
   }
 
   @Patch('plans/:id')
-  @UseGuards(RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiOperation({ summary: 'Update a plan (admin only)' })
   updatePlan(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePlanDto) {
@@ -56,30 +56,31 @@ export class SubscriptionsController {
   }
 
   @Delete('plans/:id')
-  @UseGuards(RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiOperation({ summary: 'Soft-delete a plan (admin only)' })
   softDeletePlan(@Param('id', ParseIntPipe) id: number) {
     return this.subscriptionsService.softDeletePlan(id);
   }
 
-  // Subscriptions
+  // ─── SUBSCRIPTIONS ────────────────────────────────
   @Post('assign')
-  @UseGuards(RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
-  @ApiOperation({ summary: 'Assign a plan to a branch (admin only)' })
+  @ApiOperation({ summary: 'Assign a plan to a business (admin only)' })
   assign(@Body() dto: AssignSubscriptionDto) {
     return this.subscriptionsService.assignSubscription(dto);
   }
 
-  @Get('branch/:branchId')
-  @ApiOperation({ summary: 'Get active subscription for a branch' })
-  getBranchSubscription(@Param('branchId', ParseIntPipe) branchId: number) {
-    return this.subscriptionsService.getBranchSubscription(branchId);
+  @Get('business/:businessId')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get active subscription for a business' })
+  getBusinessSubscription(@Param('businessId', ParseIntPipe) businessId: number) {
+    return this.subscriptionsService.getBusinessSubscription(businessId);
   }
 
   @Patch(':id/renew')
-  @UseGuards(RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiOperation({ summary: 'Renew a subscription (admin only)' })
   renew(@Param('id', ParseIntPipe) id: number, @Body() dto: RenewSubscriptionDto) {
@@ -87,7 +88,7 @@ export class SubscriptionsController {
   }
 
   @Patch(':id/cancel')
-  @UseGuards(RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiOperation({ summary: 'Cancel/suspend a subscription (admin only)' })
   cancel(@Param('id', ParseIntPipe) id: number) {
@@ -95,19 +96,21 @@ export class SubscriptionsController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get a subscription by ID' })
   getSubscription(@Param('id', ParseIntPipe) id: number) {
     return this.subscriptionsService.getSubscription(id);
   }
 
   @Get(':id/invoices')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'List invoices for a subscription' })
   listInvoices(@Param('id', ParseIntPipe) id: number) {
     return this.subscriptionsService.listInvoices(id);
   }
 
   @Post('invoices/:invoiceId/pay')
-  @UseGuards(RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
   @ApiOperation({ summary: 'Mark an invoice as paid (admin only)' })
   payInvoice(@Param('invoiceId', ParseIntPipe) invoiceId: number) {

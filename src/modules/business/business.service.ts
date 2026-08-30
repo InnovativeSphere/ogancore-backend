@@ -19,7 +19,7 @@ export class BusinessService {
     private readonly kycService: KycService,
   ) {}
 
-  async register(dto: RegisterBusinessDto) {
+   async register(dto: RegisterBusinessDto) {
     // Validate KYC fields based on business type
     if (
       (dto.businessType === BusinessType.BUSINESS ||
@@ -69,8 +69,10 @@ export class BusinessService {
     // Run KYC verification (if service responds)
     let kycStatus: KycStatus = KycStatus.PENDING;
     try {
+      console.log('Starting KYC verification for business:', business.businessId);
       if (dto.cacRegistrationNumber) {
         const result = await this.kycService.verifyCac(dto.cacRegistrationNumber);
+        console.log('CAC result in business service:', result);
         if (result && result.success === true) {
           kycStatus = KycStatus.VERIFIED;
         } else {
@@ -78,14 +80,17 @@ export class BusinessService {
         }
       } else if (dto.nin) {
         const result = await this.kycService.verifyNin(dto.nin);
+        console.log('NIN result in business service:', result);
         if (result && result.success === true) {
           kycStatus = KycStatus.VERIFIED;
         } else {
           kycStatus = KycStatus.REJECTED;
         }
+      } else {
+        console.log('No KYC field provided, staying PENDING');
       }
     } catch (error) {
-      // If KYC fails due to network, leave as PENDING
+      console.error('KYC verification caught an exception:', error);
       kycStatus = KycStatus.PENDING;
     }
 
@@ -121,6 +126,11 @@ export class BusinessService {
         status: 'ACTIVE',
       },
     });
+
+    // Create trial subscription if planId provided
+    if (dto.planId) {
+      await this.createTrialSubscription(business.businessId, dto.planId);
+    }
 
     // Generate tokens
     const payload = {
@@ -243,6 +253,40 @@ export class BusinessService {
     });
 
     return updatedBusiness;
+  }
+
+    private async createTrialSubscription(businessId: number, planId: number) {
+    const plan = await this.prisma.subscriptionPlan.findUnique({
+      where: { planId },
+    });
+    if (!plan) throw new BadRequestException('Plan not found');
+
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    switch (plan.interval) {
+      case 'MONTHLY':
+        endDate.setMonth(endDate.getMonth() + 1);
+        break;
+      case 'QUARTERLY':
+        endDate.setMonth(endDate.getMonth() + 3);
+        break;
+      case 'ANNUAL':
+        endDate.setFullYear(endDate.getFullYear() + 1);
+        break;
+      default:
+        endDate.setMonth(endDate.getMonth() + 1);
+    }
+
+    await this.prisma.tenantSubscription.create({
+      data: {
+        businessId,
+        planId,
+        startDate,
+        endDate,
+        status: 'TRIAL',
+        graceUntil: null,
+      },
+    });
   }
 
 }
