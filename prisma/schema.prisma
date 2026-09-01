@@ -198,6 +198,7 @@ model Business {
 
   branches      Branch[]
   subscriptions TenantSubscription[]
+  payments       PaymentTransaction[]
 
   @@map("BUSINESSES")
 }
@@ -402,6 +403,26 @@ model Payment {
   @@map("PAYMENTS")
 }
 
+model PaymentTransaction {
+  id             Int      @id @default(autoincrement())
+  reference      String   @unique @db.VarChar(100)
+  amount         Decimal  @db.Decimal(10,2)
+  currency       String   @default("NGN") @db.VarChar(3)
+  status         String   @default("PENDING") @db.VarChar(20)
+  provider       String   @default("PAYSTACK") @db.VarChar(20)
+  channel        String?  @db.VarChar(20)
+  paidAt         DateTime? @map("paid_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  businessId     Int      @map("business_id")
+  subscriptionId Int      @map("subscription_id")
+
+  business       Business           @relation(fields: [businessId], references: [businessId])
+  subscription   TenantSubscription @relation(fields: [subscriptionId], references: [subscriptionId])
+
+  @@map("PAYMENT_TRANSACTIONS")
+}
+
 // ─── Customer & Supplier Contacts ──────────────────────
 model Customer {
   customerId    Int      @id @default(autoincrement()) @map("customer_id")
@@ -534,6 +555,7 @@ model TenantSubscription {
   plan     SubscriptionPlan @relation(fields: [planId], references: [planId])
 
   invoices SubscriptionInvoice[]
+  payments       PaymentTransaction[]
 
   @@map("TENANT_SUBSCRIPTIONS")
 }

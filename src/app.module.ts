@@ -23,6 +23,7 @@ import { EmailModule } from './modules/email/email.module';
 import { KycModule } from './modules/kyc/kyc.module';
 import { BusinessModule } from './modules/business/business.module';
 import { AppController } from './app.controller';
+import { PaymentGatewayModule } from './modules/payment-gateway/payment-gateway.module';
 
 @Module({
   imports: [
@@ -48,7 +49,8 @@ import { AppController } from './app.controller';
     ReportingModule,
     EmailModule,
     BusinessModule,
-    KycModule
+    KycModule,
+    PaymentGatewayModule 
 
     
   ],

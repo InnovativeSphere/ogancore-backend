@@ -152,5 +152,51 @@ export class SeedService implements OnModuleInit {
         });
       }
     }
+
+    // 4. Seed default subscription plans (idempotent)
+    const plans = [
+      {
+        name: 'Starter',
+        interval: 'MONTHLY',
+        price: 5000,
+        features: '7 days free trial, 1 branch, 5 users',
+        maxBranches: 1,
+        maxUsers: 5,
+      },
+      {
+        name: 'Pro',
+        interval: 'MONTHLY',
+        price: 10000,
+        features: '7 days free trial, 3 branches, 10 users',
+        maxBranches: 3,
+        maxUsers: 10,
+      },
+      {
+        name: 'Enterprise',
+        interval: 'MONTHLY',
+        price: 50000,
+        features: 'Custom limits, priority support',
+        maxBranches: null, // or a large number
+        maxUsers: null,
+      },
+    ];
+
+    for (const plan of plans) {
+      const existingPlan = await this.prisma.subscriptionPlan.findFirst({
+        where: { name: plan.name },
+      });
+      if (!existingPlan) {
+        await this.prisma.subscriptionPlan.create({
+          data: {
+            name: plan.name,
+            interval: plan.interval as any,
+            price: plan.price,
+            features: plan.features,
+            maxBranches: plan.maxBranches,
+            maxUsers: plan.maxUsers,
+          },
+        });
+      }
+    }
   }
 }
