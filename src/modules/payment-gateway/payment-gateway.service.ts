@@ -2,12 +2,11 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
-  RawBodyRequest,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EmailService } from '../email/email.service'; // adjust path if needed
 import { InitializePaymentDto } from './dto/initialize-payment.dto';
 import * as crypto from 'crypto';
-import { EmailService } from '../email/email.service';
 import { NotificationType } from '@prisma/client';
 
 @Injectable()
@@ -25,21 +24,18 @@ export class PaymentGatewayService {
   }
 
   async initializePayment(userId: number, dto: InitializePaymentDto) {
-    // Determine the subscription or plan to pay for
     let businessId: number;
     let subscriptionId: number;
     let amountInNaira: number;
     let email: string;
 
     if (dto.subscriptionId) {
-      // Find the subscription and get business info
       const subscription = await this.prisma.tenantSubscription.findUnique({
         where: { subscriptionId: dto.subscriptionId },
         include: { business: true, plan: true },
       });
       if (!subscription) throw new NotFoundException('Subscription not found');
 
-      // Ensure the user's business matches the subscription's business
       const user = await this.prisma.user.findUnique({
         where: { userId },
         include: { branch: { include: { business: true } } },
@@ -48,9 +44,7 @@ export class PaymentGatewayService {
         !user?.branch?.business ||
         user.branch.business.businessId !== subscription.businessId
       ) {
-        throw new BadRequestException(
-          'You can only pay for your own subscription',
-        );
+        throw new BadRequestException('You can only pay for your own subscription');
       }
 
       businessId = subscription.businessId;
@@ -58,15 +52,12 @@ export class PaymentGatewayService {
       amountInNaira = Number(subscription.plan.price);
       email = subscription.business.businessEmail || user.email;
     } else if (dto.planId) {
-      // For a new subscription, find the business via user's branch
       const user = await this.prisma.user.findUnique({
         where: { userId },
         include: { branch: { include: { business: true } } },
       });
       if (!user?.branch?.business) {
-        throw new BadRequestException(
-          'Your account is not linked to a business',
-        );
+        throw new BadRequestException('Your account is not linked to a business');
       }
 
       const plan = await this.prisma.subscriptionPlan.findUnique({
@@ -74,8 +65,9 @@ export class PaymentGatewayService {
       });
       if (!plan) throw new NotFoundException('Plan not found');
 
-      // Check if business already has active subscription; if so, don't allow new one unless trial? For simplicity, we'll not create subscription now, just return a payment for plan.
-      // But we need subscriptionId to store in PaymentTransaction. So we'll create a pending subscription first? For MVP, assume subscription already exists (created during registration).
+      // For a new plan, we need an existing subscription (trial) to pay for.
+      // In MVP, businesses already have a trial subscription created at registration.
+      // So we require subscriptionId instead of planId for payment.
       throw new BadRequestException(
         'For new plan payments, please use subscriptionId from your active trial.',
       );
@@ -83,11 +75,9 @@ export class PaymentGatewayService {
       throw new BadRequestException('Provide either subscriptionId or planId');
     }
 
-    // Generate a unique reference
     const reference = `OGANCORE-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const amountInKobo = Math.round(amountInNaira * 100);
 
-    // Call Paystack to initialize transaction
     const paystackResponse = await fetch(
       `${this.paystackBaseUrl}/transaction/initialize`,
       {
@@ -115,7 +105,6 @@ export class PaymentGatewayService {
       );
     }
 
-    // Store the payment transaction
     await this.prisma.paymentTransaction.create({
       data: {
         reference,
@@ -144,7 +133,6 @@ export class PaymentGatewayService {
       return { status: 'error', message: 'Missing signature' };
     }
 
-    // Verify signature
     const hash = crypto
       .createHmac('sha512', secret)
       .update(req.body) // req.body is a Buffer because of express.raw
@@ -168,10 +156,8 @@ export class PaymentGatewayService {
 
     if (event === 'charge.success') {
       const reference = data.reference;
-      const amount = data.amount / 100; // Convert from kobo to naira
       const paidAt = data.paid_at ? new Date(data.paid_at) : new Date();
 
-      // Find our transaction record
       const transaction = await this.prisma.paymentTransaction.findUnique({
         where: { reference },
       });
@@ -181,7 +167,6 @@ export class PaymentGatewayService {
         return { status: 'error', message: 'Transaction not found' };
       }
 
-      // Idempotency: if already processed as success, ignore
       if (transaction.status === 'SUCCESS') {
         return { status: 'already_processed' };
       }
@@ -196,50 +181,72 @@ export class PaymentGatewayService {
         },
       });
 
-      // Fetch business email
-      const business = await this.prisma.business.findUnique({
-        where: { businessId: transaction.businessId },
-        select: { businessEmail: true },
-      });
-
-      const recipientEmail = business?.businessEmail || null;
-      if (recipientEmail) {
-        await this.emailService.sendNotificationEmail(
-          recipientEmail,
-          'Payment Received',
-          'Subscription payment successful',
-          `Your payment of ₦${Number(transaction.amount).toLocaleString()} has been received and your subscription is now active.`,
-          NotificationType.PAYMENT_RECEIVED,
-          process.env.APP_BASE_URL || 'https://ogancore.com',
-        );
-      }
-      // Activate subscription
-      await this.prisma.tenantSubscription.update({
+      // Get subscription with plan to compute end date based on interval
+      const subscription = await this.prisma.tenantSubscription.findUnique({
         where: { subscriptionId: transaction.subscriptionId },
-        data: {
-          status: 'ACTIVE',
-          startDate: new Date(),
-          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-        },
+        include: { plan: true },
       });
 
-      // Mark invoice as paid
-      const invoice = await this.prisma.subscriptionInvoice.findFirst({
-        where: { subscriptionId: transaction.subscriptionId, status: 'unpaid' },
-        orderBy: { dueDate: 'asc' },
-      });
+      if (subscription) {
+        let endDate = new Date();
+        switch (subscription.plan.interval) {
+          case 'MONTHLY':
+            endDate.setMonth(endDate.getMonth() + 1);
+            break;
+          case 'QUARTERLY':
+            endDate.setMonth(endDate.getMonth() + 3);
+            break;
+          case 'ANNUAL':
+            endDate.setFullYear(endDate.getFullYear() + 1);
+            break;
+          default:
+            endDate.setMonth(endDate.getMonth() + 1);
+        }
 
-      if (invoice) {
-        await this.prisma.subscriptionInvoice.update({
-          where: { invoiceId: invoice.invoiceId },
-          data: { status: 'paid', paidAt },
+        await this.prisma.tenantSubscription.update({
+          where: { subscriptionId: subscription.subscriptionId },
+          data: {
+            status: 'ACTIVE',
+            startDate: new Date(),
+            endDate,
+          },
         });
+
+        // Mark invoice as paid
+        const invoice = await this.prisma.subscriptionInvoice.findFirst({
+          where: { subscriptionId: subscription.subscriptionId, status: 'unpaid' },
+          orderBy: { dueDate: 'asc' },
+        });
+
+        if (invoice) {
+          await this.prisma.subscriptionInvoice.update({
+            where: { invoiceId: invoice.invoiceId },
+            data: { status: 'paid', paidAt },
+          });
+        }
+
+        // Send payment receipt email
+        const business = await this.prisma.business.findUnique({
+          where: { businessId: transaction.businessId },
+          select: { businessEmail: true },
+        });
+
+        const recipientEmail = business?.businessEmail || null;
+        if (recipientEmail) {
+          await this.emailService.sendNotificationEmail(
+            recipientEmail,
+            'Payment Received',
+            'Subscription payment successful',
+            `Your payment of ₦${Number(transaction.amount).toLocaleString()} has been received and your subscription is now active.`,
+            NotificationType.PAYMENT_RECEIVED,
+            process.env.APP_BASE_URL || 'https://ogancore.com',
+          );
+        }
       }
 
       return { status: 'success' };
     }
 
-    // Ignore other events for now
     return { status: 'ignored' };
   }
 }

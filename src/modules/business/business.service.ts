@@ -255,7 +255,7 @@ export class BusinessService {
     return updatedBusiness;
   }
 
-    private async createTrialSubscription(businessId: number, planId: number) {
+      private async createTrialSubscription(businessId: number, planId: number) {
     const plan = await this.prisma.subscriptionPlan.findUnique({
       where: { planId },
     });
@@ -277,7 +277,7 @@ export class BusinessService {
         endDate.setMonth(endDate.getMonth() + 1);
     }
 
-    await this.prisma.tenantSubscription.create({
+    const subscription = await this.prisma.tenantSubscription.create({
       data: {
         businessId,
         planId,
@@ -287,6 +287,17 @@ export class BusinessService {
         graceUntil: null,
       },
     });
-  }
 
+    // Auto‑generate subscription invoice immediately (FR‑009)
+    await this.prisma.subscriptionInvoice.create({
+      data: {
+        subscriptionId: subscription.subscriptionId,
+        amount: plan.price,
+        dueDate: startDate,
+        status: 'unpaid',
+      },
+    });
+
+    return subscription;
+  }
 }
