@@ -67,27 +67,24 @@ export class BusinessService {
     });
 
     // Run KYC verification (if service responds)
-    let kycStatus: KycStatus = KycStatus.PENDING;
+       let kycStatus: KycStatus = KycStatus.PENDING;
     try {
       console.log('Starting KYC verification for business:', business.businessId);
+      let result: any;
+
       if (dto.cacRegistrationNumber) {
-        const result = await this.kycService.verifyCac(dto.cacRegistrationNumber);
+        result = await this.kycService.verifyCac(dto.cacRegistrationNumber);
         console.log('CAC result in business service:', result);
-        if (result && result.success === true) {
-          kycStatus = KycStatus.VERIFIED;
-        } else {
-          kycStatus = KycStatus.REJECTED;
-        }
       } else if (dto.nin) {
-        const result = await this.kycService.verifyNin(dto.nin);
+        result = await this.kycService.verifyNin(dto.nin);
         console.log('NIN result in business service:', result);
-        if (result && result.success === true) {
-          kycStatus = KycStatus.VERIFIED;
-        } else {
-          kycStatus = KycStatus.REJECTED;
-        }
       } else {
         console.log('No KYC field provided, staying PENDING');
+      }
+
+      if (result !== undefined) {
+        kycStatus = this.interpretKycResult(result);
+        console.log('Interpreted KYC status:', kycStatus);
       }
     } catch (error) {
       console.error('KYC verification caught an exception:', error);
@@ -95,7 +92,7 @@ export class BusinessService {
     }
 
     // Update business with final KYC status
-    await this.prisma.business.update({
+    const updatedBusiness = await this.prisma.business.update({
       where: { businessId: business.businessId },
       data: { kycStatus },
     });
@@ -149,7 +146,7 @@ export class BusinessService {
     const refreshToken = this.jwtService.sign(payload, refreshTokenOptions);
 
     return {
-      business,
+      business: updatedBusiness,
       branch,
       user: {
         userId: user.userId,
@@ -162,6 +159,30 @@ export class BusinessService {
       accessToken,
       refreshToken,
     };
+  }
+
+    private interpretKycResult(result: any): KycStatus {
+    if (!result) return KycStatus.PENDING;
+
+    // If the API returns an explicit verification outcome
+    if (result.data?.verificationOutcome) {
+      if (result.data.verificationOutcome === 'SUCCESS' || result.data.verificationOutcome === 'VERIFIED') {
+        return KycStatus.VERIFIED;
+      }
+      return KycStatus.REJECTED;
+    }
+
+    // Otherwise, consider a valid result if it contains actual PII fields
+    if (result.data?.nin && (result.data?.firstName || result.data?.lastName)) {
+      return KycStatus.VERIFIED;
+    }
+
+    // If httpStatus indicates a client error, reject
+    if (result.data?.httpStatus && result.data.httpStatus >= 400) {
+      return KycStatus.REJECTED;
+    }
+
+    return KycStatus.PENDING;
   }
 
   async getProfile(userId: number) {
@@ -217,23 +238,18 @@ export class BusinessService {
       throw new BadRequestException('No NIN or CAC registration number available for verification');
     }
 
-    let kycStatus: KycStatus = KycStatus.PENDING;
+     let kycStatus: KycStatus = KycStatus.PENDING;
 
     try {
+      let result: any;
       if (cac) {
-        const result = await this.kycService.verifyCac(cac);
-        if (result && result.success === true) {
-          kycStatus = KycStatus.VERIFIED;
-        } else {
-          kycStatus = KycStatus.REJECTED;
-        }
+        result = await this.kycService.verifyCac(cac);
       } else if (nin) {
-        const result = await this.kycService.verifyNin(nin);
-        if (result && result.success === true) {
-          kycStatus = KycStatus.VERIFIED;
-        } else {
-          kycStatus = KycStatus.REJECTED;
-        }
+        result = await this.kycService.verifyNin(nin);
+      }
+
+      if (result !== undefined) {
+        kycStatus = this.interpretKycResult(result);
       }
     } catch (error) {
       kycStatus = KycStatus.PENDING;
