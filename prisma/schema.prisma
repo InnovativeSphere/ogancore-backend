@@ -196,6 +196,8 @@ model Business {
   createdAt             DateTime     @default(now()) @map("created_at")
   updatedAt             DateTime     @updatedAt @map("updated_at")
 
+  categories  Category[]
+  suppliers   Supplier[]
   branches      Branch[]
   subscriptions TenantSubscription[]
   payments       PaymentTransaction[]
@@ -240,7 +242,8 @@ model Category {
   description  String?  @db.Text
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
-
+businessId  Int?      @map("business_id")
+business    Business? @relation(fields: [businessId], references: [businessId])
   products Product[]
 
   @@map("CATEGORIES")
@@ -265,7 +268,8 @@ model Supplier {
   address      String?  @db.Text
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
-
+businessId  Int?      @map("business_id")
+business    Business? @relation(fields: [businessId], references: [businessId])
   products       Product[]
   purchaseOrders PurchaseOrder[]
 

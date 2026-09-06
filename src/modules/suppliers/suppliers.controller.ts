@@ -10,6 +10,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
+import { GetUser } from '../../common/decorators/get-user.decorator';
 
 @ApiTags('Suppliers')
 @Controller('suppliers')
@@ -21,8 +22,11 @@ export class SuppliersController {
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a supplier' })
-  create(@Body() dto: CreateSupplierDto) {
-    return this.suppliersService.create(dto);
+  create(
+    @Body() dto: CreateSupplierDto,
+    @GetUser('userId') userId: number,
+  ) {
+    return this.suppliersService.create(dto, userId);
   }
 
   @Get()
@@ -30,16 +34,22 @@ export class SuppliersController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List suppliers (active by default)' })
   @ApiQuery({ name: 'includeInactive', required: false, type: Boolean })
-  findAll(@Query('includeInactive') includeInactive?: string) {
-    return this.suppliersService.findAll(includeInactive === 'true');
+  findAll(
+    @GetUser('userId') userId: number,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
+    return this.suppliersService.findAll(includeInactive === 'true', userId);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a supplier by ID' })
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.suppliersService.findOne(id);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('userId') userId: number,
+  ) {
+    return this.suppliersService.findOne(id, userId);
   }
 
   @Patch(':id')
@@ -47,8 +57,12 @@ export class SuppliersController {
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a supplier' })
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateSupplierDto) {
-    return this.suppliersService.update(id, dto);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateSupplierDto,
+    @GetUser('userId') userId: number,
+  ) {
+    return this.suppliersService.update(id, dto, userId);
   }
 
   @Delete(':id')
@@ -56,7 +70,10 @@ export class SuppliersController {
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a supplier' })
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.suppliersService.remove(id);
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('userId') userId: number,
+  ) {
+    return this.suppliersService.remove(id, userId);
   }
 }

@@ -10,6 +10,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
+import { GetUser } from '../../common/decorators/get-user.decorator';
 
 @ApiTags('Categories')
 @Controller('categories')
@@ -21,8 +22,11 @@ export class CategoriesController {
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a category' })
-  create(@Body() dto: CreateCategoryDto) {
-    return this.categoriesService.create(dto);
+  create(
+    @Body() dto: CreateCategoryDto,
+    @GetUser('userId') userId: number,
+  ) {
+    return this.categoriesService.create(dto, userId);
   }
 
   @Get()
@@ -30,16 +34,22 @@ export class CategoriesController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List categories (active by default)' })
   @ApiQuery({ name: 'includeInactive', required: false, type: Boolean })
-  findAll(@Query('includeInactive') includeInactive?: string) {
-    return this.categoriesService.findAll(includeInactive === 'true');
+  findAll(
+    @GetUser('userId') userId: number,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
+    return this.categoriesService.findAll(includeInactive === 'true', userId);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a category by ID' })
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.categoriesService.findOne(id);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('userId') userId: number,
+  ) {
+    return this.categoriesService.findOne(id, userId);
   }
 
   @Patch(':id')
@@ -50,8 +60,9 @@ export class CategoriesController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCategoryDto,
+    @GetUser('userId') userId: number,
   ) {
-    return this.categoriesService.update(id, dto);
+    return this.categoriesService.update(id, dto, userId);
   }
 
   @Delete(':id')
@@ -59,7 +70,10 @@ export class CategoriesController {
   @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a category' })
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.categoriesService.remove(id);
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('userId') userId: number,
+  ) {
+    return this.categoriesService.remove(id, userId);
   }
 }

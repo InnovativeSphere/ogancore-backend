@@ -158,6 +158,7 @@ export class BusinessService {
         role: businessAdminRole.roleName,
         branchId: user.branchId,
       },
+      planId: dto.planId ?? null, // ⬅️ NEW: include planId in response
       accessToken,
       refreshToken,
     };
@@ -193,7 +194,7 @@ export class BusinessService {
     });
   }
 
-    async verifyKyc(userId: number, dto: { nin?: string; cacRegistrationNumber?: string }) {
+  async verifyKyc(userId: number, dto: { nin?: string; cacRegistrationNumber?: string }) {
     const user = await this.prisma.user.findUnique({
       where: { userId },
       include: {
@@ -209,7 +210,6 @@ export class BusinessService {
 
     const business = user.branch.business;
 
-    // Determine identifier to verify
     const nin = dto.nin || business.nin;
     const cac = dto.cacRegistrationNumber || business.cacRegistrationNumber;
 
@@ -236,13 +236,9 @@ export class BusinessService {
         }
       }
     } catch (error) {
-      // Network error or other issue -> leave PENDING so user can retry
       kycStatus = KycStatus.PENDING;
     }
 
-    
-
-    // Update business with new KYC status and possibly new identifier values
     const updatedBusiness = await this.prisma.business.update({
       where: { businessId: business.businessId },
       data: {
@@ -255,7 +251,7 @@ export class BusinessService {
     return updatedBusiness;
   }
 
-      private async createTrialSubscription(businessId: number, planId: number) {
+  private async createTrialSubscription(businessId: number, planId: number) {
     const plan = await this.prisma.subscriptionPlan.findUnique({
       where: { planId },
     });
@@ -288,7 +284,6 @@ export class BusinessService {
       },
     });
 
-    // Auto‑generate subscription invoice immediately (FR‑009)
     await this.prisma.subscriptionInvoice.create({
       data: {
         subscriptionId: subscription.subscriptionId,
