@@ -73,6 +73,11 @@ export class RegisterBusinessDto {
   @IsString()
   branchName?: string;
 
+  @ApiPropertyOptional({ description: 'URL of uploaded NIN or CAC document' })
+  @IsOptional()
+  @IsString()
+  kycDocumentUrl?: string;
+
   @ApiPropertyOptional({ description: 'Branch address' })
   @IsOptional()
   @IsString()

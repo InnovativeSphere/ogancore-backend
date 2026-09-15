@@ -19,8 +19,7 @@ export class BusinessService {
     private readonly kycService: KycService,
   ) {}
 
-   async register(dto: RegisterBusinessDto) {
-    // Validate KYC fields based on business type
+  async register(dto: RegisterBusinessDto) {
     if (
       (dto.businessType === BusinessType.BUSINESS ||
         dto.businessType === BusinessType.ENTREPRENEUR) &&
@@ -32,7 +31,6 @@ export class BusinessService {
       );
     }
 
-    // Check email uniqueness
     const existingUser = await this.prisma.user.findUnique({
       where: { email: dto.ownerEmail },
     });
@@ -40,7 +38,6 @@ export class BusinessService {
       throw new ConflictException('An account with this email already exists');
     }
 
-    // Find BUSINESS_ADMIN role
     const businessAdminRole = await this.prisma.role.findFirst({
       where: { roleName: 'BUSINESS_ADMIN' },
     });
@@ -48,10 +45,8 @@ export class BusinessService {
       throw new BadRequestException('BUSINESS_ADMIN role not found');
     }
 
-    // Hash password
     const passwordHash = await bcrypt.hash(dto.ownerPassword, 12);
 
-    // Create business
     const business = await this.prisma.business.create({
       data: {
         businessName: dto.businessName,
@@ -63,11 +58,11 @@ export class BusinessService {
         cacRegistrationNumber: dto.cacRegistrationNumber,
         nin: dto.nin,
         kycStatus: KycStatus.PENDING,
+        kycDocumentUrl: dto.kycDocumentUrl,
       },
     });
 
-    // Run KYC verification (if service responds)
-       let kycStatus: KycStatus = KycStatus.PENDING;
+    let kycStatus: KycStatus = KycStatus.PENDING;
     try {
       console.log('Starting KYC verification for business:', business.businessId);
       let result: any;
@@ -91,13 +86,15 @@ export class BusinessService {
       kycStatus = KycStatus.PENDING;
     }
 
-    // Update business with final KYC status
     const updatedBusiness = await this.prisma.business.update({
       where: { businessId: business.businessId },
-      data: { kycStatus },
+      data: {
+        kycStatus,
+        kycMethod: kycStatus === KycStatus.PENDING ? null : 'API',
+        kycVerifiedAt: kycStatus === KycStatus.VERIFIED ? new Date() : null,
+      },
     });
 
-    // Create default branch linked to business
     const branch = await this.prisma.branch.create({
       data: {
         branchName: dto.branchName || 'Main Branch',
@@ -106,11 +103,11 @@ export class BusinessService {
       },
     });
 
-    // Generate a username from email prefix (removing non-alphanumeric)
-    const usernameBase = dto.ownerEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '');
+    const usernameBase = dto.ownerEmail
+      .split('@')[0]
+      .replace(/[^a-zA-Z0-9_]/g, '');
     const username = `${usernameBase}_${Math.floor(Math.random() * 10000)}`;
 
-    // Create owner user with BUSINESS_ADMIN role and assigned branch
     const user = await this.prisma.user.create({
       data: {
         fullName: dto.ownerFullName,
@@ -124,12 +121,10 @@ export class BusinessService {
       },
     });
 
-    // Create trial subscription if planId provided
     if (dto.planId) {
       await this.createTrialSubscription(business.businessId, dto.planId);
     }
 
-    // Generate tokens
     const payload = {
       sub: user.userId,
       branchId: user.branchId,
@@ -155,34 +150,10 @@ export class BusinessService {
         role: businessAdminRole.roleName,
         branchId: user.branchId,
       },
-      planId: dto.planId ?? null, // ⬅️ NEW: include planId in response
+      planId: dto.planId ?? null,
       accessToken,
       refreshToken,
     };
-  }
-
-    private interpretKycResult(result: any): KycStatus {
-    if (!result) return KycStatus.PENDING;
-
-    // If the API returns an explicit verification outcome
-    if (result.data?.verificationOutcome) {
-      if (result.data.verificationOutcome === 'SUCCESS' || result.data.verificationOutcome === 'VERIFIED') {
-        return KycStatus.VERIFIED;
-      }
-      return KycStatus.REJECTED;
-    }
-
-    // Otherwise, consider a valid result if it contains actual PII fields
-    if (result.data?.nin && (result.data?.firstName || result.data?.lastName)) {
-      return KycStatus.VERIFIED;
-    }
-
-    // If httpStatus indicates a client error, reject
-    if (result.data?.httpStatus && result.data.httpStatus >= 400) {
-      return KycStatus.REJECTED;
-    }
-
-    return KycStatus.PENDING;
   }
 
   async getProfile(userId: number) {
@@ -215,7 +186,10 @@ export class BusinessService {
     });
   }
 
-  async verifyKyc(userId: number, dto: { nin?: string; cacRegistrationNumber?: string }) {
+  async verifyKyc(
+    userId: number,
+    dto: { nin?: string; cacRegistrationNumber?: string },
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { userId },
       include: {
@@ -235,10 +209,12 @@ export class BusinessService {
     const cac = dto.cacRegistrationNumber || business.cacRegistrationNumber;
 
     if (!nin && !cac) {
-      throw new BadRequestException('No NIN or CAC registration number available for verification');
+      throw new BadRequestException(
+        'No NIN or CAC registration number available for verification',
+      );
     }
 
-     let kycStatus: KycStatus = KycStatus.PENDING;
+    let kycStatus: KycStatus = KycStatus.PENDING;
 
     try {
       let result: any;
@@ -259,12 +235,134 @@ export class BusinessService {
       where: { businessId: business.businessId },
       data: {
         kycStatus,
+        kycMethod: kycStatus === KycStatus.PENDING ? null : 'API',
+        kycVerifiedAt: kycStatus === KycStatus.VERIFIED ? new Date() : null,
         ...(dto.nin ? { nin: dto.nin } : {}),
-        ...(dto.cacRegistrationNumber ? { cacRegistrationNumber: dto.cacRegistrationNumber } : {}),
+        ...(dto.cacRegistrationNumber
+          ? { cacRegistrationNumber: dto.cacRegistrationNumber }
+          : {}),
       },
     });
 
     return updatedBusiness;
+  }
+
+  // ─── Manual KYC Workflow ─────────────────────────────────────
+  async updateKycDocument(userId: number, documentUrl: string) {
+    const business = await this.getProfile(userId);
+    return this.prisma.business.update({
+      where: { businessId: business.businessId },
+      data: { kycDocumentUrl: documentUrl },
+    });
+  }
+
+  async requestKycReview(userId: number) {
+    const business = await this.getProfile(userId);
+
+    if (!business.kycDocumentUrl) {
+      throw new BadRequestException(
+        'Please upload a NIN or CAC document before requesting review',
+      );
+    }
+
+    if (business.kycStatus === KycStatus.VERIFIED) {
+      throw new BadRequestException('Your business is already verified');
+    }
+
+    if (business.kycReviewRequested) {
+      throw new BadRequestException('You have already requested a review');
+    }
+
+    return this.prisma.business.update({
+      where: { businessId: business.businessId },
+      data: {
+        kycReviewRequested: true,
+        kycReviewRequestedAt: new Date(),
+        kycRejectionReason: null,
+      },
+    });
+  }
+
+  async listPendingKycReviews() {
+    return this.prisma.business.findMany({
+      where: {
+        kycReviewRequested: true,
+        kycStatus: { not: KycStatus.VERIFIED },
+        isActive: true,
+      },
+      orderBy: { kycReviewRequestedAt: 'asc' },
+      select: {
+        businessId: true,
+        businessName: true,
+        businessType: true,
+        businessEmail: true,
+        businessPhone: true,
+        cacRegistrationNumber: true,
+        nin: true,
+        kycStatus: true,
+        kycDocumentUrl: true,
+        kycReviewRequestedAt: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async verifyKycManual(
+    businessId: number,
+    action: 'VERIFY' | 'REJECT',
+    adminUserId: number,
+    rejectionReason: string | null = null,
+  ) {
+    const business = await this.prisma.business.findUnique({
+      where: { businessId },
+    });
+
+    if (!business) {
+      throw new BadRequestException('Business not found');
+    }
+
+    if (action === 'REJECT' && !rejectionReason) {
+      throw new BadRequestException('Rejection reason is required');
+    }
+
+    const kycStatus =
+      action === 'VERIFY' ? KycStatus.VERIFIED : KycStatus.REJECTED;
+
+    return this.prisma.business.update({
+      where: { businessId },
+      data: {
+        kycStatus,
+        kycMethod: 'MANUAL',
+        kycVerifiedAt: action === 'VERIFY' ? new Date() : null,
+        kycVerifiedBy: adminUserId,
+        kycRejectionReason: action === 'REJECT' ? rejectionReason : null,
+        kycReviewRequested: false,
+      },
+    });
+  }
+
+  private interpretKycResult(result: any): KycStatus {
+    if (!result) return KycStatus.PENDING;
+
+    if (result.data?.verificationOutcome) {
+      if (
+        result.data.verificationOutcome === 'SUCCESS' ||
+        result.data.verificationOutcome === 'VERIFIED'
+      ) {
+        return KycStatus.VERIFIED;
+      }
+      return KycStatus.REJECTED;
+    }
+
+    if (result.data?.nin && (result.data?.firstName || result.data?.lastName)) {
+      return KycStatus.VERIFIED;
+    }
+
+    if (result.data?.httpStatus && result.data.httpStatus >= 400) {
+      return KycStatus.REJECTED;
+    }
+
+    return KycStatus.PENDING;
   }
 
   private async createTrialSubscription(businessId: number, planId: number) {

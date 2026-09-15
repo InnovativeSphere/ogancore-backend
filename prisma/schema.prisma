@@ -107,6 +107,11 @@ enum BusinessType {
   ENTREPRENEUR
 }
 
+enum KycMethod {
+  API
+  MANUAL
+}
+
 enum KycStatus {
   PENDING
   VERIFIED
@@ -154,6 +159,7 @@ model User {
   financialReportsGenerated FinancialReport[]
   recordedExpenses          Expense[]             @relation("ExpenseRecorder")
   approvedExpenses          Expense[]             @relation("ExpenseApprover")
+    verifiedBusinesses   Business[]   @relation("KycVerifier")
 
   @@map("USERS")
 }
@@ -192,6 +198,15 @@ model Business {
   cacRegistrationNumber String?      @map("cac_registration_number") @db.VarChar(50)
   nin                   String?      @db.VarChar(20)
   kycStatus             KycStatus    @default(PENDING) @map("kyc_status")
+  kycMethod            KycMethod?   @map("kyc_method")
+  kycVerifiedAt        DateTime?    @map("kyc_verified_at")
+  kycVerifiedBy        Int?         @map("kyc_verified_by")
+  kycDocumentUrl       String?      @db.Text @map("kyc_document_url")
+  kycReviewRequested    Boolean    @default(false) @map("kyc_review_requested")
+  kycReviewRequestedAt  DateTime?  @map("kyc_review_requested_at")
+  kycRejectionReason    String?    @db.Text @map("kyc_rejection_reason")
+  
+  verifier             User?        @relation("KycVerifier", fields: [kycVerifiedBy], references: [userId])
   isActive              Boolean      @default(true) @map("is_active")
   createdAt             DateTime     @default(now()) @map("created_at")
   updatedAt             DateTime     @updatedAt @map("updated_at")
