@@ -11,6 +11,8 @@ import { RegisterBusinessDto } from './dto/register-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
 import { BusinessType, KycStatus } from '@prisma/client';
 
+
+
 @Injectable()
 export class BusinessService {
   constructor(

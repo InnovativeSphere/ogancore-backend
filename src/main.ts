@@ -1,36 +1,48 @@
-import * as dotenv from 'dotenv';
-dotenv.config();
-
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 import { AppModule } from './app.module';
-import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { RequestMethod } from '@nestjs/common';
-import * as express from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.useGlobalInterceptors(new TransformInterceptor());
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Global API prefix – e.g., /api/products, /api/sales
-  app.setGlobalPrefix('api', {
-    exclude: [{ path: '', method: RequestMethod.GET }],
+  app.setGlobalPrefix('api');
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+    }),
+  );
+
+  // Trust Railway's proxy so req.protocol/https detection works
+  app.set('trust proxy', 1);
+
+  // Ensure upload folder exists and serve it
+  const uploadRoot = process.env.UPLOAD_ROOT || join(process.cwd(), 'uploads');
+  if (!existsSync(uploadRoot)) {
+    mkdirSync(uploadRoot, { recursive: true });
+  }
+
+  app.useStaticAssets(uploadRoot, {
+    prefix: '/uploads/',
   });
-  // Enable CORS for frontend access
-  app.enableCors();
 
-  // Swagger setup
+  // Swagger
   const config = new DocumentBuilder()
     .setTitle('OGANCORE API')
     .setDescription('Multi-tenant Business Management + POS SaaS')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
-
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document); // UI at /api/docs
-  app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
+  SwaggerModule.setup('api/docs', app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+  const port = process.env.PORT || 3000;
+  await app.listen(port, '0.0.0.0');
+  console.log(`Application running on port ${port}`);
 }
 bootstrap();
