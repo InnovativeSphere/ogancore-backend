@@ -131,11 +131,11 @@ export class BusinessController {
   @UseInterceptors(
     FileInterceptor(
       'file',
-      buildUploadConfig({
-        folder: 'logos',
-        allowedExtensions: ['.png', '.jpg', '.jpeg', '.svg', '.webp'],
-        maxSizeBytes: 5 * 1024 * 1024,
-      }),
+   buildUploadConfig({
+  folder: 'logos',
+  allowedExtensions: ['.png', '.jpg', '.jpeg', '.svg', '.webp'],
+  maxSizeBytes: 15 * 1024 * 1024,
+}),
     ),
   )
   uploadLogo(@UploadedFile() file: Express.Multer.File) {
