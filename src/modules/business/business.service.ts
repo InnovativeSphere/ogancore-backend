@@ -21,7 +21,8 @@ export class BusinessService {
     private readonly kycService: KycService,
   ) {}
 
-  async register(dto: RegisterBusinessDto) {
+   async register(dto: RegisterBusinessDto) {
+    // Validate KYC fields based on business type
     if (
       (dto.businessType === BusinessType.BUSINESS ||
         dto.businessType === BusinessType.ENTREPRENEUR) &&
@@ -33,6 +34,7 @@ export class BusinessService {
       );
     }
 
+    // Check email uniqueness
     const existingUser = await this.prisma.user.findUnique({
       where: { email: dto.ownerEmail },
     });
@@ -40,6 +42,7 @@ export class BusinessService {
       throw new ConflictException('An account with this email already exists');
     }
 
+    // Find BUSINESS_ADMIN role
     const businessAdminRole = await this.prisma.role.findFirst({
       where: { roleName: 'BUSINESS_ADMIN' },
     });
@@ -47,8 +50,10 @@ export class BusinessService {
       throw new BadRequestException('BUSINESS_ADMIN role not found');
     }
 
+    // Hash password
     const passwordHash = await bcrypt.hash(dto.ownerPassword, 12);
 
+    // Create business
     const business = await this.prisma.business.create({
       data: {
         businessName: dto.businessName,
@@ -64,39 +69,18 @@ export class BusinessService {
       },
     });
 
-    let kycStatus: KycStatus = KycStatus.PENDING;
-    try {
-      console.log('Starting KYC verification for business:', business.businessId);
-      let result: any;
-
-      if (dto.cacRegistrationNumber) {
-        result = await this.kycService.verifyCac(dto.cacRegistrationNumber);
-        console.log('CAC result in business service:', result);
-      } else if (dto.nin) {
-        result = await this.kycService.verifyNin(dto.nin);
-        console.log('NIN result in business service:', result);
-      } else {
-        console.log('No KYC field provided, staying PENDING');
-      }
-
-      if (result !== undefined) {
-        kycStatus = this.interpretKycResult(result);
-        console.log('Interpreted KYC status:', kycStatus);
-      }
-    } catch (error) {
-      console.error('KYC verification caught an exception:', error);
-      kycStatus = KycStatus.PENDING;
-    }
-
+    // KYC is not triggered during registration.
+    // Business starts at PENDING and verification is user-initiated.
     const updatedBusiness = await this.prisma.business.update({
       where: { businessId: business.businessId },
       data: {
-        kycStatus,
-        kycMethod: kycStatus === KycStatus.PENDING ? null : 'API',
-        kycVerifiedAt: kycStatus === KycStatus.VERIFIED ? new Date() : null,
+        kycStatus: KycStatus.PENDING,
+        kycMethod: null,
+        kycVerifiedAt: null,
       },
     });
 
+    // Create default branch linked to business
     const branch = await this.prisma.branch.create({
       data: {
         branchName: dto.branchName || 'Main Branch',
@@ -105,11 +89,13 @@ export class BusinessService {
       },
     });
 
+    // Generate a username from email prefix (removing non-alphanumeric)
     const usernameBase = dto.ownerEmail
       .split('@')[0]
       .replace(/[^a-zA-Z0-9_]/g, '');
     const username = `${usernameBase}_${Math.floor(Math.random() * 10000)}`;
 
+    // Create owner user with BUSINESS_ADMIN role and assigned branch
     const user = await this.prisma.user.create({
       data: {
         fullName: dto.ownerFullName,
@@ -123,10 +109,12 @@ export class BusinessService {
       },
     });
 
+    // Create trial subscription if planId provided
     if (dto.planId) {
       await this.createTrialSubscription(business.businessId, dto.planId);
     }
 
+    // Generate tokens
     const payload = {
       sub: user.userId,
       branchId: user.branchId,
@@ -206,6 +194,12 @@ export class BusinessService {
     }
 
     const business = user.branch.business;
+        // Once a business is manually verified, the API must not override it.
+    if (business.kycMethod === 'MANUAL' && business.kycStatus === KycStatus.VERIFIED) {
+      throw new BadRequestException(
+        'This business is already manually verified. Automatic verification is disabled.',
+      );
+    }
 
     const nin = dto.nin || business.nin;
     const cac = dto.cacRegistrationNumber || business.cacRegistrationNumber;
