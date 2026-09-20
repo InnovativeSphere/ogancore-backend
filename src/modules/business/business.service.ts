@@ -309,6 +309,12 @@ export class BusinessService {
     adminUserId: number,
     rejectionReason: string | null = null,
   ) {
+    if (action !== 'VERIFY' && action !== 'REJECT') {
+      throw new BadRequestException(
+        'action must be either "VERIFY" or "REJECT"',
+      );
+    }
+
     const business = await this.prisma.business.findUnique({
       where: { businessId },
     });
