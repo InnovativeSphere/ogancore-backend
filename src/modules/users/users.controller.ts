@@ -62,16 +62,16 @@ export class UsersController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List all users (admin only)' })
-  findAll() {
-    return this.usersService.findAll();
+  @ApiOperation({ summary: 'List users (scoped by role)' })
+  findAll(@GetUser('userId') requesterUserId: number) {
+    return this.usersService.findAll(requesterUserId);
   }
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN') // added BUSINESS_ADMIN
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a user (admin or business admin)' })
   create(@Body() dto: CreateUserDto, @GetUser('userId') creatorUserId: number) {
@@ -93,10 +93,13 @@ export class UsersController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'IT_ADMIN', 'BUSINESS_ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Deactivate a user (admin only)' })
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.usersService.remove(id);
+  @ApiOperation({ summary: 'Deactivate a user (scoped by role)' })
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('userId') requesterUserId: number,
+  ) {
+    return this.usersService.remove(id, requesterUserId);
   }
 }
