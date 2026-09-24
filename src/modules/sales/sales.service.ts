@@ -11,14 +11,22 @@ import {
 } from './dto/create-sale.dto';
 import { RefundSaleDto } from './dto/refund-sale.dto';
 import { NotificationsService } from '../notifications/notifications.service';
-import { NotificationType, SaleStatus, PaymentStatus, MovementType, PaymentMethod } from '@prisma/client';
+import {
+  NotificationType,
+  SaleStatus,
+  PaymentStatus,
+  MovementType,
+  PaymentMethod,
+  ItemType,
+} from '@prisma/client';
 
 @Injectable()
 export class SalesService {
-constructor(
-  private readonly prisma: PrismaService,
-  private readonly notificationsService: NotificationsService,
-) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
+
   private computePaymentStatus(
     grandTotal: number,
     totalPaid: number,
@@ -54,6 +62,7 @@ constructor(
         totalPrice: number;
         discount: number;
         tax: number;
+        itemType: ItemType;
       }> = [];
 
       let subtotal = 0;
@@ -93,6 +102,7 @@ constructor(
           totalPrice: lineTotal,
           discount: lineDiscount,
           tax: lineTax,
+          itemType: product.itemType,
         });
       }
 
@@ -126,7 +136,7 @@ constructor(
       if (totalPaid < grandTotal && totalPaid > 0) {
         saleStatus = SaleStatus.PENDING;
       } else if (totalPaid === 0) {
-        saleStatus = SaleStatus.PENDING; // or DRAFT? We'll use PENDING for unpaid credit sale
+        saleStatus = SaleStatus.PENDING; // unpaid credit sale
       }
 
       const transactionNumber = `TXN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -149,8 +159,25 @@ constructor(
         },
       });
 
-      // Create sale items and deduct inventory
+      // Create sale items and deduct inventory (products only)
       for (const item of builtItems) {
+        await tx.saleItem.create({
+          data: {
+            saleId: sale.saleId,
+            productId: item.productId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
+            discount: item.discount,
+            tax: item.tax,
+          },
+        });
+
+        // Services are not stock-tracked — skip inventory entirely.
+        if (item.itemType === ItemType.SERVICE) {
+          continue;
+        }
+
         const inventory = await tx.inventory.findUnique({
           where: {
             productId_branchId: {
@@ -188,18 +215,6 @@ constructor(
             note: `Sale ${transactionNumber}`,
           },
         });
-
-        await tx.saleItem.create({
-          data: {
-            saleId: sale.saleId,
-            productId: item.productId,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            totalPrice: item.totalPrice,
-            discount: item.discount,
-            tax: item.tax,
-          },
-        });
       }
 
       // Create payments
@@ -218,13 +233,13 @@ constructor(
         });
         createdPayments.push(created);
       }
-       await this.notificationsService.createForUser(
+
+      await this.notificationsService.createForUser(
         userId,
         NotificationType.PAYMENT_RECEIVED,
         'Payment received',
         `A payment of ₦${totalPaid} has been recorded for sale ${transactionNumber}.`,
       );
-      
 
       await tx.auditLog.create({
         data: {
@@ -300,7 +315,7 @@ constructor(
           : null,
         stats: {
           transactionTotal: grandTotal,
-          grossProfit: 0, // we could compute later if needed
+          grossProfit: 0,
           itemsSold: builtItems.reduce((sum, i) => sum + i.quantity, 0),
           totalSalesToday: 0,
           totalTransactionsToday: 0,
@@ -458,7 +473,10 @@ constructor(
         grossProfit,
         totalItemsSold,
         averageTransactionValue,
-        totalDiscount: allSales.reduce((sum, s) => sum + Number(s.discount), 0),
+        totalDiscount: allSales.reduce(
+          (sum, s) => sum + Number(s.discount),
+          0,
+        ),
       },
       pagination: {
         page,
@@ -539,7 +557,7 @@ constructor(
     return this.prisma.$transaction(async (tx) => {
       const sale = await tx.sale.findUnique({
         where: { saleId: id },
-        include: { items: true },
+        include: { items: { include: { product: true } } },
       });
       if (!sale) throw new NotFoundException('Sale not found');
       if (sale.status === SaleStatus.RETURNED) {
@@ -547,6 +565,11 @@ constructor(
       }
 
       for (const item of sale.items) {
+        // Services have no inventory to restore — skip.
+        if (item.product?.itemType === ItemType.SERVICE) {
+          continue;
+        }
+
         const inventory = await tx.inventory.findUnique({
           where: {
             productId_branchId: {

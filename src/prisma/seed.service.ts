@@ -35,13 +35,13 @@ export class SeedService implements OnModuleInit {
       'Other',
     ];
 
-    for (const categoryName of expenseCategories) {
+     for (const categoryName of expenseCategories) {
       const existing = await this.prisma.expenseCategory.findFirst({
-        where: { categoryName },
+        where: { categoryName, isGlobal: true },
       });
       if (!existing) {
         await this.prisma.expenseCategory.create({
-          data: { categoryName },
+          data: { categoryName, isGlobal: true },
         });
       }
     }

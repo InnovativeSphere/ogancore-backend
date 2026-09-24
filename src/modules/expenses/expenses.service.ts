@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -10,10 +11,55 @@ import { ExpenseStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '@prisma/client';
 
-
 @Injectable()
 export class ExpensesService {
-  constructor(private readonly prisma: PrismaService,private readonly notificationsService: NotificationsService, ) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
+
+  /**
+   * Ensure the caller is allowed to use this expense category.
+   * Rules:
+   *  - Platform admins (SUPER_ADMIN, IT_ADMIN) → any category
+   *  - Global categories (isGlobal = true) → usable by everyone
+   *  - Business-scoped categories → only by members of that business
+   */
+  private async assertCategoryAccess(categoryId: number, userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { userId },
+      select: {
+        role: { select: { roleName: true } },
+        branch: { select: { businessId: true } },
+      },
+    });
+    if (!user) throw new BadRequestException('User not found');
+
+    const category = await this.prisma.expenseCategory.findUnique({
+      where: { categoryId },
+    });
+    if (!category || !category.isActive) {
+      throw new BadRequestException('Expense category not found');
+    }
+
+    // Platform admins bypass scope checks
+    const roleName = user.role?.roleName;
+    if (roleName === 'SUPER_ADMIN' || roleName === 'IT_ADMIN') {
+      return category;
+    }
+
+    // Global categories are usable by any business
+    if (category.isGlobal) return category;
+
+    // Business-scoped: must belong to the caller's business
+    const userBusinessId = user.branch?.businessId ?? null;
+    if (!userBusinessId || category.businessId !== userBusinessId) {
+      // Same message for "not found" and "forbidden" — don't leak existence
+      throw new ForbiddenException('Expense category not found');
+    }
+
+    return category;
+  }
 
   async create(userId: number, dto: CreateExpenseDto) {
     const branch = await this.prisma.branch.findUnique({
@@ -21,10 +67,7 @@ export class ExpensesService {
     });
     if (!branch) throw new BadRequestException('Branch not found');
 
-    const category = await this.prisma.expenseCategory.findUnique({
-      where: { categoryId: dto.categoryId },
-    });
-    if (!category) throw new BadRequestException('Expense category not found');
+    await this.assertCategoryAccess(dto.categoryId, userId);
 
     const expenseNumber = `EXP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
@@ -85,17 +128,21 @@ export class ExpensesService {
     await this.findOne(id);
 
     if (dto.branchId) {
-      const branch = await this.prisma.branch.findUnique({ where: { branchId: dto.branchId } });
+      const branch = await this.prisma.branch.findUnique({
+        where: { branchId: dto.branchId },
+      });
       if (!branch) throw new BadRequestException('Branch not found');
     }
     if (dto.categoryId) {
-      const category = await this.prisma.expenseCategory.findUnique({ where: { categoryId: dto.categoryId } });
-      if (!category) throw new BadRequestException('Expense category not found');
+      await this.assertCategoryAccess(dto.categoryId, userId);
     }
 
     // If status is being changed to APPROVED or REJECTED, set approver
     const data: any = { ...dto };
-    if (dto.status === ExpenseStatus.APPROVED || dto.status === ExpenseStatus.REJECTED) {
+    if (
+      dto.status === ExpenseStatus.APPROVED ||
+      dto.status === ExpenseStatus.REJECTED
+    ) {
       data.approvedBy = userId;
     }
 
@@ -118,18 +165,17 @@ export class ExpensesService {
     }
 
     await this.notificationsService.createForUser(
-  expense.recordedBy,
-  NotificationType.EXPENSE_APPROVED,
-  'Expense approved',
-  `Your expense "${expense.title}" has been approved.`,
-);
+      expense.recordedBy,
+      NotificationType.EXPENSE_APPROVED,
+      'Expense approved',
+      `Your expense "${expense.title}" has been approved.`,
+    );
 
     return this.prisma.expense.update({
       where: { expenseId: id },
       data: { status: ExpenseStatus.APPROVED, approvedBy: userId },
       include: { category: true, branch: true },
     });
-    
   }
 
   async reject(id: number, userId: number) {
@@ -139,11 +185,11 @@ export class ExpensesService {
     }
 
     await this.notificationsService.createForUser(
-  expense.recordedBy,
-  NotificationType.EXPENSE_REJECTED,
-  'Expense rejected',
-  `Your expense "${expense.title}" was rejected.`,
-);
+      expense.recordedBy,
+      NotificationType.EXPENSE_REJECTED,
+      'Expense rejected',
+      `Your expense "${expense.title}" was rejected.`,
+    );
 
     return this.prisma.expense.update({
       where: { expenseId: id },

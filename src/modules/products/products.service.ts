@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ItemType } from '@prisma/client';
 
 @Injectable()
 export class ProductsService {
@@ -53,7 +54,10 @@ export class ProductsService {
    * Ensure the provided branchId belongs to the user's business,
    * or set it to the user's own branch if not provided.
    */
-  private async resolveBranchId(userId: number, branchId?: number): Promise<number | null> {
+  private async resolveBranchId(
+    userId: number,
+    branchId?: number,
+  ): Promise<number | null> {
     const allowed = await this.getAllowedBranchIds(userId);
     if (allowed === null) {
       return branchId ?? null; // platform roles: no restriction
@@ -66,7 +70,9 @@ export class ProductsService {
     }
 
     if (!allowed.includes(branchId)) {
-      throw new ForbiddenException('You can only manage products in your own business');
+      throw new ForbiddenException(
+        'You can only manage products in your own business',
+      );
     }
 
     return branchId;
@@ -74,6 +80,11 @@ export class ProductsService {
 
   async create(dto: CreateProductDto, userId: number) {
     const branchId = await this.resolveBranchId(userId, dto.branchId);
+
+    const itemType = dto.itemType ?? ItemType.PRODUCT;
+    // Services are not stock-tracked — force it off regardless of what the client sends.
+    const trackInventory =
+      itemType === ItemType.SERVICE ? false : dto.trackInventory ?? true;
 
     const data: any = {
       productName: dto.name,
@@ -91,7 +102,8 @@ export class ProductsService {
       discount: dto.discount,
       image: dto.image,
       reorderLevel: dto.stockAlertLevel ?? 0,
-      trackInventory: dto.trackInventory ?? true,
+      itemType,
+      trackInventory,
       status: dto.status || 'active',
     };
 
@@ -104,7 +116,8 @@ export class ProductsService {
       const existing = await this.prisma.product.findFirst({
         where: { barcode: dto.barcode, status: 'active' },
       });
-      if (existing) throw new ConflictException('A product with this barcode already exists');
+      if (existing)
+        throw new ConflictException('A product with this barcode already exists');
     }
 
     return this.prisma.product.create({
@@ -113,7 +126,10 @@ export class ProductsService {
     });
   }
 
-  async findAll(filters: { branchId?: number; categoryId?: number; search?: string }, userId: number) {
+  async findAll(
+    filters: { branchId?: number; categoryId?: number; search?: string },
+    userId: number,
+  ) {
     const allowedBranchIds = await this.getAllowedBranchIds(userId);
     const where: any = { status: 'active' };
 
@@ -172,7 +188,8 @@ export class ProductsService {
       where,
       include: { category: true, supplier: true },
     });
-    if (!product) throw new NotFoundException('Product not found for this barcode');
+    if (!product)
+      throw new NotFoundException('Product not found for this barcode');
     return product;
   }
 
@@ -212,7 +229,11 @@ export class ProductsService {
     });
     if (!product) throw new NotFoundException('Product not found');
 
-    if (allowedBranchIds !== null && product.branchId !== null && !allowedBranchIds.includes(product.branchId)) {
+    if (
+      allowedBranchIds !== null &&
+      product.branchId !== null &&
+      !allowedBranchIds.includes(product.branchId)
+    ) {
       throw new NotFoundException('Product not found');
     }
 
@@ -233,8 +254,15 @@ export class ProductsService {
     }
 
     if (dto.categoryId) {
-      const category = await this.prisma.category.findUnique({ where: { categoryId: dto.categoryId } });
+      const category = await this.prisma.category.findUnique({
+        where: { categoryId: dto.categoryId },
+      });
       if (!category) throw new BadRequestException('Category not found');
+    }
+
+    // If the item is (or is being) changed to a SERVICE, force inventory tracking off.
+    if (dto.itemType === ItemType.SERVICE) {
+      data.trackInventory = false;
     }
 
     return this.prisma.product.update({
@@ -249,7 +277,8 @@ export class ProductsService {
     const data: any = {};
     if (dto.costPrice !== undefined) data.costPrice = dto.costPrice;
     if (dto.sellingPrice !== undefined) data.sellingPrice = dto.sellingPrice;
-    if (dto.wholesalePrice !== undefined) data.wholesalePrice = dto.wholesalePrice;
+    if (dto.wholesalePrice !== undefined)
+      data.wholesalePrice = dto.wholesalePrice;
 
     return this.prisma.product.update({
       where: { productId: id },

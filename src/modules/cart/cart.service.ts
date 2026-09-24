@@ -10,7 +10,7 @@ import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
 import { CheckoutCartDto } from './dto/checkout-cart.dto';
 import { ScanBarcodeDto } from './dto/scan-barcode.dto';
-import { PaymentMethod } from '@prisma/client';
+import { PaymentMethod, ItemType } from '@prisma/client';
 import { Prisma, SaleStatus, PaymentStatus } from '@prisma/client';
 
 @Injectable()
@@ -82,7 +82,8 @@ export class CartService {
   async addItem(cartId: number, dto: AddCartItemDto) {
     const cart = await this.prisma.cart.findUnique({ where: { cartId } });
     if (!cart) throw new NotFoundException('Cart not found');
-    if (cart.status !== 'ACTIVE') throw new BadRequestException('Cart is not active');
+    if (cart.status !== 'ACTIVE')
+      throw new BadRequestException('Cart is not active');
 
     const product = await this.prisma.product.findUnique({
       where: { productId: dto.productId },
@@ -101,7 +102,8 @@ export class CartService {
         where: { cartItemId: existing.cartItemId },
         data: {
           quantity: existing.quantity + dto.quantity,
-          total: Number(existing.unitPrice) * (existing.quantity + dto.quantity),
+          total:
+            Number(existing.unitPrice) * (existing.quantity + dto.quantity),
         },
         include: { product: true },
       });
@@ -133,16 +135,21 @@ export class CartService {
     const product = await this.prisma.product.findFirst({
       where: { barcode: dto.barcode, status: 'active' },
     });
-    if (!product) throw new BadRequestException('Product not found for barcode');
+    if (!product)
+      throw new BadRequestException('Product not found for barcode');
 
-    return this.addItem(cartId, { productId: product.productId, quantity: dto.quantity || 1 });
+    return this.addItem(cartId, {
+      productId: product.productId,
+      quantity: dto.quantity || 1,
+    });
   }
 
   async updateItem(cartId: number, itemId: number, dto: UpdateCartItemDto) {
     const item = await this.prisma.cartItem.findUnique({
       where: { cartItemId: itemId },
     });
-    if (!item || item.cartId !== cartId) throw new NotFoundException('Cart item not found');
+    if (!item || item.cartId !== cartId)
+      throw new NotFoundException('Cart item not found');
 
     if (dto.quantity === 0) {
       await this.prisma.cartItem.delete({ where: { cartItemId: itemId } });
@@ -163,7 +170,8 @@ export class CartService {
     const item = await this.prisma.cartItem.findUnique({
       where: { cartItemId: itemId },
     });
-    if (!item || item.cartId !== cartId) throw new NotFoundException('Cart item not found');
+    if (!item || item.cartId !== cartId)
+      throw new NotFoundException('Cart item not found');
 
     await this.prisma.cartItem.delete({ where: { cartItemId: itemId } });
     await this.recalculateCart(cartId);
@@ -217,14 +225,16 @@ export class CartService {
     return this.getCart(cart.cartId);
   }
 
-   async checkout(cartId: number, userId: number, dto: CheckoutCartDto) {
+  async checkout(cartId: number, userId: number, dto: CheckoutCartDto) {
     const cart = await this.prisma.cart.findUnique({
       where: { cartId },
       include: { items: true },
     });
     if (!cart) throw new NotFoundException('Cart not found');
-    if (cart.status !== 'ACTIVE') throw new BadRequestException('Cart is not active');
-    if (cart.items.length === 0) throw new BadRequestException('Cart is empty');
+    if (cart.status !== 'ACTIVE')
+      throw new BadRequestException('Cart is not active');
+    if (cart.items.length === 0)
+      throw new BadRequestException('Cart is empty');
 
     // Recalculate totals before checkout
     const totals = await this.recalculateCart(cartId);
@@ -278,7 +288,9 @@ export class CartService {
 
     // Create sale items and update inventory
     for (const item of cart.items) {
-      const product = await this.prisma.product.findUnique({ where: { productId: item.productId } });
+      const product = await this.prisma.product.findUnique({
+        where: { productId: item.productId },
+      });
       if (!product) throw new BadRequestException('Product not found');
 
       await this.prisma.saleItem.create({
@@ -293,8 +305,18 @@ export class CartService {
         },
       });
 
+      // Services are not stock-tracked — skip inventory deduction entirely.
+      if (product.itemType === ItemType.SERVICE) {
+        continue;
+      }
+
       const inventory = await this.prisma.inventory.findUnique({
-        where: { productId_branchId: { productId: item.productId, branchId: cart.branchId } },
+        where: {
+          productId_branchId: {
+            productId: item.productId,
+            branchId: cart.branchId,
+          },
+        },
       });
       if (inventory) {
         await this.prisma.inventory.update({

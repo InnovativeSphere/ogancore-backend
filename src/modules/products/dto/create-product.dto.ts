@@ -4,11 +4,13 @@ import {
   IsNumber,
   IsBoolean,
   IsInt,
+  IsEnum,
   Min,
   MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { ItemType } from '@prisma/client';
 
 export class CreateProductDto {
   @ApiProperty({ description: 'Product name', example: 'Indomie Noodles' })
@@ -97,6 +99,15 @@ export class CreateProductDto {
   @Min(0)
   @Type(() => Number)
   stockAlertLevel?: number;
+
+  @ApiPropertyOptional({
+    description: 'Product or service',
+    enum: ItemType,
+    default: ItemType.PRODUCT,
+  })
+  @IsOptional()
+  @IsEnum(ItemType)
+  itemType?: ItemType;
 
   @ApiPropertyOptional({ description: 'Track inventory', default: true })
   @IsOptional()
