@@ -25,6 +25,7 @@ import { BusinessModule } from './modules/business/business.module';
 import { AppController } from './app.controller';
 import { ExpenseCategoriesModule } from './modules/expense-categories/expense-categories.module';
 import { PaymentGatewayModule } from './modules/payment-gateway/payment-gateway.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 
 @Module({
   imports: [
@@ -52,9 +53,8 @@ import { PaymentGatewayModule } from './modules/payment-gateway/payment-gateway.
     EmailModule,
     BusinessModule,
     KycModule,
-    PaymentGatewayModule 
-
-    
+    PaymentGatewayModule,
+    InvoicesModule,
   ],
   controllers: [AppController],
   providers: [],
