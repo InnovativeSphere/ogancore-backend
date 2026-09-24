@@ -43,7 +43,7 @@ lerna-debug.log*
 .env.local
 uploads/
 project-dump.json
-project-dump.js
+dump-project.js
 # temp directory
 .temp
 .tmp
