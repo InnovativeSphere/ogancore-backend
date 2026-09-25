@@ -13,7 +13,7 @@ import { Type } from 'class-transformer';
 import { ItemType } from '@prisma/client';
 
 export class CreateProductDto {
-  @ApiProperty({ description: 'Product name', example: 'Indomie Noodles' })
+  @ApiProperty({ description: 'Product or service name', example: 'Indomie Noodles' })
   @IsString()
   @MaxLength(100)
   name!: string;
@@ -50,12 +50,16 @@ export class CreateProductDto {
   @Type(() => Number)
   branchId?: number;
 
-  @ApiPropertyOptional({ description: 'Unit', example: 'Carton' })
+  @ApiPropertyOptional({ description: 'Unit (e.g. Carton, Hour)', example: 'Carton' })
   @IsOptional()
   @IsString()
   unit?: string;
 
-  @ApiProperty({ description: 'Cost price', example: 8500 })
+  @ApiProperty({
+    description:
+      'Cost price. For services, use 0 — you are selling time, not stock.',
+    example: 8500,
+  })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   @Type(() => Number)
@@ -93,7 +97,11 @@ export class CreateProductDto {
   @IsString()
   image?: string;
 
-  @ApiPropertyOptional({ description: 'Stock alert level', example: 50 })
+  @ApiPropertyOptional({
+    description:
+      'Stock alert level. Ignored for services — they are not stock-tracked.',
+    example: 50,
+  })
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -101,15 +109,21 @@ export class CreateProductDto {
   stockAlertLevel?: number;
 
   @ApiPropertyOptional({
-    description: 'Product or service',
+    description:
+      'Set to SERVICE for non-inventory items (e.g. consultation, delivery, installation). Services bypass inventory checks in cart checkout, sales, and refunds. Defaults to PRODUCT.',
     enum: ItemType,
     default: ItemType.PRODUCT,
+    example: ItemType.SERVICE,
   })
   @IsOptional()
   @IsEnum(ItemType)
   itemType?: ItemType;
 
-  @ApiPropertyOptional({ description: 'Track inventory', default: true })
+  @ApiPropertyOptional({
+    description:
+      'Track inventory. Automatically forced to false when itemType is SERVICE, regardless of what is sent.',
+    default: true,
+  })
   @IsOptional()
   @IsBoolean()
   trackInventory?: boolean;
