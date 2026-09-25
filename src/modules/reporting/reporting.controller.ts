@@ -9,7 +9,12 @@ import {
   ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { ReportingService } from './reporting.service';
 import { GenerateSalesReportDto } from './dto/generate-sales-report.dto';
 import { GenerateInventoryReportDto } from './dto/generate-inventory-report.dto';
@@ -29,68 +34,165 @@ import { GetUser } from '../../common/decorators/get-user.decorator';
 export class ReportingController {
   constructor(private readonly reportingService: ReportingService) {}
 
+  // ─── BUSINESS OVERVIEW (live, no persistence) ──────────
+  @Get('business/overview')
+  @ApiOperation({
+    summary:
+      'Live business-wide aggregate (sales, expenses, profit, top products/customers). Not persisted.',
+  })
+  @ApiQuery({ name: 'branchId', required: false, type: Number })
+  @ApiQuery({
+    name: 'businessId',
+    required: false,
+    type: Number,
+    description: 'Required for platform admins',
+  })
+  @ApiQuery({ name: 'dateFrom', required: true, type: String })
+  @ApiQuery({ name: 'dateTo', required: true, type: String })
+  businessOverview(
+    @GetUser('userId') userId: number,
+    @Query('branchId') branchId?: string,
+    @Query('businessId') businessId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.reportingService.getBusinessOverview(userId, {
+      branchId: branchId ? parseInt(branchId, 10) : undefined,
+      businessId: businessId ? parseInt(businessId, 10) : undefined,
+      dateFrom,
+      dateTo,
+      startDate,
+      endDate,
+    });
+  }
+
+  // ─── SALES REPORTS ────────────────────────────────────
   @Post('sales')
-  generateSales(@GetUser('userId') userId: number, @Body() dto: GenerateSalesReportDto) {
+  @ApiOperation({ summary: 'Generate and persist a sales report for a branch' })
+  generateSales(
+    @GetUser('userId') userId: number,
+    @Body() dto: GenerateSalesReportDto,
+  ) {
     return this.reportingService.generateSalesReport(userId, dto);
   }
 
   @Get('sales')
-  listSales(@Query('branchId') branchId?: string) {
-    return this.reportingService.listSalesReports(branchId ? parseInt(branchId, 10) : undefined);
+  @ApiOperation({ summary: 'List persisted sales reports (scoped)' })
+  @ApiQuery({ name: 'branchId', required: false, type: Number })
+  listSales(
+    @GetUser('userId') userId: number,
+    @Query('branchId') branchId?: string,
+  ) {
+    return this.reportingService.listSalesReports(
+      userId,
+      branchId ? parseInt(branchId, 10) : undefined,
+    );
   }
 
   @Get('sales/:id')
-  getSales(@Param('id', ParseIntPipe) id: number) {
-    return this.reportingService.getSalesReport(id);
+  @ApiOperation({ summary: 'Get a persisted sales report by ID' })
+  getSales(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('userId') userId: number,
+  ) {
+    return this.reportingService.getSalesReport(id, userId);
   }
 
+  // ─── INVENTORY REPORTS ────────────────────────────────
   @Post('inventory')
-  generateInventory(@GetUser('userId') userId: number, @Body() dto: GenerateInventoryReportDto) {
+  @ApiOperation({ summary: 'Generate and persist an inventory report for a branch' })
+  generateInventory(
+    @GetUser('userId') userId: number,
+    @Body() dto: GenerateInventoryReportDto,
+  ) {
     return this.reportingService.generateInventoryReport(userId, dto);
   }
 
   @Get('inventory')
-  listInventory(@Query('branchId') branchId?: string) {
-    return this.reportingService.listInventoryReports(branchId ? parseInt(branchId, 10) : undefined);
+  @ApiOperation({ summary: 'List persisted inventory reports (scoped)' })
+  @ApiQuery({ name: 'branchId', required: false, type: Number })
+  listInventory(
+    @GetUser('userId') userId: number,
+    @Query('branchId') branchId?: string,
+  ) {
+    return this.reportingService.listInventoryReports(
+      userId,
+      branchId ? parseInt(branchId, 10) : undefined,
+    );
   }
 
   @Get('inventory/:id')
-  getInventory(@Param('id', ParseIntPipe) id: number) {
-    return this.reportingService.getInventoryReport(id);
+  @ApiOperation({ summary: 'Get a persisted inventory report by ID' })
+  getInventory(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('userId') userId: number,
+  ) {
+    return this.reportingService.getInventoryReport(id, userId);
   }
 
+  // ─── FINANCIAL REPORTS ────────────────────────────────
   @Post('financial')
-  generateFinancial(@GetUser('userId') userId: number, @Body() dto: GenerateFinancialReportDto) {
+  @ApiOperation({ summary: 'Generate and persist a financial report for a branch' })
+  generateFinancial(
+    @GetUser('userId') userId: number,
+    @Body() dto: GenerateFinancialReportDto,
+  ) {
     return this.reportingService.generateFinancialReport(userId, dto);
   }
 
   @Get('financial')
-  listFinancial(@Query('branchId') branchId?: string) {
-    return this.reportingService.listFinancialReports(branchId ? parseInt(branchId, 10) : undefined);
+  @ApiOperation({ summary: 'List persisted financial reports (scoped)' })
+  @ApiQuery({ name: 'branchId', required: false, type: Number })
+  listFinancial(
+    @GetUser('userId') userId: number,
+    @Query('branchId') branchId?: string,
+  ) {
+    return this.reportingService.listFinancialReports(
+      userId,
+      branchId ? parseInt(branchId, 10) : undefined,
+    );
   }
 
   @Get('financial/:id')
-  getFinancial(@Param('id', ParseIntPipe) id: number) {
-    return this.reportingService.getFinancialReport(id);
+  @ApiOperation({ summary: 'Get a persisted financial report by ID' })
+  getFinancial(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('userId') userId: number,
+  ) {
+    return this.reportingService.getFinancialReport(id, userId);
   }
 
+  // ─── REPORT LOGS ──────────────────────────────────────
   @Get('logs')
-  listLogs() {
-    return this.reportingService.listReportLogs();
+  @ApiOperation({ summary: 'List report generation logs' })
+  listLogs(@GetUser('userId') userId: number) {
+    return this.reportingService.listReportLogs(userId);
   }
 
+  // ─── SCHEDULES ────────────────────────────────────────
   @Post('schedules')
-  createSchedule(@Body() dto: CreateReportScheduleDto) {
-    return this.reportingService.createSchedule(dto);
+  @ApiOperation({ summary: 'Create a recurring report schedule' })
+  createSchedule(
+    @GetUser('userId') userId: number,
+    @Body() dto: CreateReportScheduleDto,
+  ) {
+    return this.reportingService.createSchedule(dto, userId);
   }
 
   @Get('schedules')
-  listSchedules() {
-    return this.reportingService.listSchedules();
+  @ApiOperation({ summary: 'List report schedules (scoped)' })
+  listSchedules(@GetUser('userId') userId: number) {
+    return this.reportingService.listSchedules(userId);
   }
 
   @Delete('schedules/:id')
-  deleteSchedule(@Param('id', ParseIntPipe) id: number) {
-    return this.reportingService.deleteSchedule(id);
+  @ApiOperation({ summary: 'Delete a report schedule' })
+  deleteSchedule(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('userId') userId: number,
+  ) {
+    return this.reportingService.deleteSchedule(id, userId);
   }
 }

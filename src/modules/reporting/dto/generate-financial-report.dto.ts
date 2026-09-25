@@ -1,19 +1,45 @@
 import { IsOptional, IsInt, IsDateString } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class GenerateFinancialReportDto {
-  @ApiPropertyOptional({ description: 'Branch ID' })
+  @ApiPropertyOptional({
+    description: 'Branch ID (optional; omit for business-wide)',
+  })
   @IsOptional()
   @IsInt()
   @Type(() => Number)
   branchId?: number;
 
-  @ApiProperty({ description: 'Start date (YYYY-MM-DD)' })
+  @ApiPropertyOptional({
+    description: 'Start date (YYYY-MM-DD) — preferred',
+    example: '2026-09-01',
+  })
+  @IsOptional()
   @IsDateString()
-  startDate!: string;
+  dateFrom?: string;
 
-  @ApiProperty({ description: 'End date (YYYY-MM-DD)' })
+  @ApiPropertyOptional({
+    description: 'End date (YYYY-MM-DD) — preferred',
+    example: '2026-09-30',
+  })
+  @IsOptional()
   @IsDateString()
-  endDate!: string;
+  dateTo?: string;
+
+  @ApiPropertyOptional({
+    description: 'Deprecated alias for dateFrom (kept for frontend compatibility)',
+    deprecated: true,
+  })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Deprecated alias for dateTo (kept for frontend compatibility)',
+    deprecated: true,
+  })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 }
